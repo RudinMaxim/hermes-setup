@@ -1,0 +1,17 @@
+FROM jrei/systemd-ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      bats \
+      curl \
+      ca-certificates \
+      sudo \
+      iproute2 \
+      gnupg \
+      git \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /repo
+
+# systemd is the entrypoint (inherited from base image)

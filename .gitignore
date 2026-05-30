@@ -1,0 +1,11 @@
+# Local secrets / state
+config/.env
+config/mcp.toml
+
+# Test artifacts
+tests/.bats-tmp/
+*.log
+
+# Editors
+.vscode/
+.idea/

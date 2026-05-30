@@ -1,0 +1,28 @@
+# config/docker-compose.yml
+# Run from the repo root: docker compose -f config/docker-compose.yml up -d
+
+services:
+  hermes:
+    image: ${HERMES_IMAGE:-nousresearch/hermes-agent:latest}
+    container_name: hermes
+    restart: unless-stopped
+    env_file: ./.env
+    volumes:
+      - hermes_data:/home/hermes/.hermes
+    networks: [hermes_net]
+    healthcheck:
+      test: ["CMD-SHELL", "hermes --version >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    stdin_open: true
+    tty: true
+
+volumes:
+  hermes_data:
+    name: hermes_data
+
+networks:
+  hermes_net:
+    name: hermes_net
