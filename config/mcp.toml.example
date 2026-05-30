@@ -1,0 +1,57 @@
+# config/mcp.toml.example
+# Copy to config/mcp.toml. Toggle enabled = true after filling required env
+# vars in config/.env. See docs/mcp/<name>.md for instructions.
+
+[filesystem]
+enabled = false
+description = "local filesystem access (mounted from host)"
+transport = "stdio"
+package = "@modelcontextprotocol/server-filesystem"
+requires = []
+mount = "/home/hermes/projects"
+
+[github]
+enabled = false
+description = "repos, PRs, issues"
+transport = "stdio"
+package = "@modelcontextprotocol/server-github"
+requires = ["GITHUB_TOKEN"]
+
+[context7]
+enabled = false
+description = "up-to-date library docs"
+transport = "stdio"
+package = "@upstash/context7-mcp"
+requires = []
+
+[memory]
+enabled = false
+description = "long-term agent memory (SQLite in volume)"
+transport = "stdio"
+package = "@modelcontextprotocol/server-memory"
+requires = []
+
+[playwright]
+enabled = false
+description = "browser automation for E2E / scraping"
+transport = "http"
+image = "mcr.microsoft.com/playwright/mcp:latest"
+port = 9001
+requires = []
+
+[postgres]
+enabled = false
+description = "execute SQL, inspect schema"
+transport = "stdio"
+package = "@modelcontextprotocol/server-postgres"
+requires = ["POSTGRES_URL"]
+
+[docker_mcp]
+enabled = false
+description = "inspect host containers and logs"
+transport = "stdio"
+package = "@modelcontextprotocol/server-docker"
+requires = []
+# Mounting /var/run/docker.sock grants root-equivalent access to the host.
+# Set this to true to acknowledge the risk — required to enable docker_mcp.
+acknowledge_socket_risk = false

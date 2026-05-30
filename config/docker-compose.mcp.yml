@@ -1,0 +1,21 @@
+# config/docker-compose.mcp.yml
+# Auxiliary compose file — only used by setup-mcp.sh for http-transport MCPs.
+# The set of active services here mirrors enabled = true in mcp.toml.
+
+services:
+  mcp-playwright:
+    image: mcr.microsoft.com/playwright/mcp:latest
+    container_name: mcp-playwright
+    restart: unless-stopped
+    networks: [hermes_net]
+    profiles: [playwright]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9001/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  hermes_net:
+    external: true
+    name: hermes_net
