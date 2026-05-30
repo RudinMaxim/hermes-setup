@@ -6,6 +6,9 @@ set -euo pipefail
 IFS=$'\n\t'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+HERMES_HOME=/home/hermes
+HERMES_REPO="$HERMES_HOME/hermes-setup"
 # shellcheck source=lib/log.sh
 source "$SCRIPT_DIR/lib/log.sh"
 # shellcheck source=lib/checks.sh
@@ -100,10 +103,62 @@ EOF
   fi
 }
 
+ensure_repo_in_hermes_home() {
+  if [[ "$REPO_ROOT" == "$HERMES_REPO" ]]; then
+    log_skip "repo already at $HERMES_REPO"
+    return 0
+  fi
+  if [[ -d "$HERMES_REPO" ]]; then
+    log_skip "$HERMES_REPO already exists (not overwriting)"
+    return 0
+  fi
+  log_act "copying repo $REPO_ROOT -> $HERMES_REPO"
+  cp -a "$REPO_ROOT" "$HERMES_REPO"
+  chown -R hermes:hermes "$HERMES_REPO"
+  log_ok "repo copied to $HERMES_REPO"
+}
+
+ensure_hermes_ssh_key() {
+  local hk=/home/hermes/.ssh/authorized_keys
+  if [[ -s "$hk" ]]; then
+    log_skip "hermes already has SSH key(s) in $hk"
+    return 0
+  fi
+
+  # 1. Explicit override via env var. Multiple keys: separate with literal '\n'
+  #    or just pass a single key.
+  if [[ -n "${HERMES_SSH_KEY:-}" ]]; then
+    log_act "writing hermes SSH key from \$HERMES_SSH_KEY"
+    install -d -m 0700 -o hermes -g hermes /home/hermes/.ssh
+    printf '%b\n' "$HERMES_SSH_KEY" > "$hk"
+    chown hermes:hermes "$hk"
+    chmod 0600 "$hk"
+    log_ok "hermes SSH key installed from \$HERMES_SSH_KEY"
+    return 0
+  fi
+
+  # 2. Fall back to root's own key files if /root/.ssh/authorized_keys was empty
+  #    but root has its own keypair (some providers leave only id_*.pub).
+  local pub
+  for pub in /root/.ssh/id_ed25519.pub /root/.ssh/id_rsa.pub /root/.ssh/id_ecdsa.pub; do
+    if [[ -s "$pub" ]]; then
+      log_act "seeding hermes authorized_keys from $pub"
+      install -d -m 0700 -o hermes -g hermes /home/hermes/.ssh
+      install -m 0600 -o hermes -g hermes "$pub" "$hk"
+      log_ok "hermes SSH key seeded from $pub"
+      return 0
+    fi
+  done
+
+  log_warn "hermes has no SSH key — SSH hardening will be skipped"
+  log_warn "to enable hardening, re-run with: HERMES_SSH_KEY='ssh-ed25519 AAAA... you@host' sudo $0"
+}
+
 ensure_ssh_hardening() {
   local hk=/home/hermes/.ssh/authorized_keys
   if [[ ! -s "$hk" ]]; then
-    die "refusing to harden SSH: hermes has no SSH keys ($hk empty/missing) — would cause self-lockout"
+    log_warn "skipping SSH hardening: hermes has no SSH keys ($hk missing) — would cause self-lockout"
+    return 0
   fi
 
   local target=/etc/ssh/sshd_config.d/99-hermes.conf
@@ -244,7 +299,9 @@ main() {
   ensure_apt_cache_fresh
   ensure_pkgs
   ensure_hermes_user
+  ensure_hermes_ssh_key
   ensure_sudoers
+  ensure_repo_in_hermes_home
   ensure_ssh_hardening
   ensure_ufw
   ensure_fail2ban
@@ -252,6 +309,10 @@ main() {
   ensure_docker
 
   log_ok "server setup complete"
+  log_ok "next steps:"
+  log_ok "  su - hermes"
+  log_ok "  cd ~/hermes-setup && nano config/.env   # add OPENAI_API_KEY or ANTHROPIC_API_KEY"
+  log_ok "  ./scripts/setup-hermes.sh"
 }
 
 main "$@"

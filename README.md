@@ -15,28 +15,30 @@ Idempotent bash installer for [Hermes Agent](https://hermes-agent.nousresearch.c
 # 1. Provision a Debian 12 or Ubuntu 22.04 VPS, add your SSH key, log in as root.
 ssh root@<vps-ip>
 
-# 2. Clone this repo.
-git clone https://github.com/RudinMaxim/hermes-setup.git hermes-setup
+# 2. Clone and run the server preparation (creates 'hermes' user, installs
+#    Docker, copies the repo to /home/hermes/hermes-setup, hardens SSH, enables UFW).
+git clone https://github.com/RudinMaxim/hermes-setup.git
 cd hermes-setup
-
-# 3. Run the server preparation. Creates the 'hermes' user, installs Docker,
-#    hardens SSH (require key auth), enables UFW.
 sudo ./scripts/setup-server.sh
 
-# 4. Switch to the hermes user (or log out and back in as hermes).
+# If root has no SSH key (logged in with password), provide one for hermes:
+#   HERMES_SSH_KEY="ssh-ed25519 AAAA... you@host" sudo ./scripts/setup-server.sh
+
+# 3. Verify the new SSH login works from a SECOND terminal before closing root:
+#   ssh hermes@<vps-ip>
+
+# 4. Switch to hermes, fill the LLM key, launch Hermes.
 su - hermes
 cd ~/hermes-setup
-
-# 5. Fill in at least one LLM key in config/.env (see docs/02-hermes-setup.md).
-cp config/.env.example config/.env
-nano config/.env
-
-# 6. Launch Hermes.
+nano config/.env          # set OPENAI_API_KEY=... or ANTHROPIC_API_KEY=...
 ./scripts/setup-hermes.sh
 
-# 7. (Optional) Enable MCP servers by editing config/mcp.toml, then run:
+# 5. (Optional) Enable MCP servers:
+nano config/mcp.toml      # toggle enabled = true for what you want
 ./scripts/setup-mcp.sh
 ```
+
+`setup-hermes.sh` copies `config/.env.example` → `config/.env` automatically on first run if you skip step 4's `nano`; it will then abort with a clear message asking you to fill the key.
 
 ## Documentation
 

@@ -15,7 +15,17 @@
    ssh-keygen -t ed25519 -C "hermes-setup@<your-email>"
    ```
 2. Paste the public key (`~/.ssh/id_ed25519.pub`) into your VPS provider's web UI **before** booting the server. Most providers inject it into `/root/.ssh/authorized_keys` automatically.
-3. Test login: `ssh root@<vps-ip>`. If this works, `setup-server.sh` will be able to copy the key over to the `hermes` user.
+3. Test login: `ssh root@<vps-ip>`.
+
+**Where `setup-server.sh` looks for the hermes user's key**, in order:
+1. `$HERMES_SSH_KEY` — explicit override (multi-line OK, separate keys with `\n`):
+   ```bash
+   HERMES_SSH_KEY="ssh-ed25519 AAAA... you@host" sudo ./scripts/setup-server.sh
+   ```
+2. `/root/.ssh/authorized_keys` — the key your provider injected.
+3. `/root/.ssh/id_ed25519.pub` / `id_rsa.pub` / `id_ecdsa.pub` — root's own keypair.
+
+If none of those exist, the script prints a warning and **skips SSH hardening** (UFW, fail2ban, Docker still install). Re-run later with `HERMES_SSH_KEY=...` to enable hardening.
 
 ### DNS (only if you plan to expose a gateway later)
 - For Telegram webhooks or a WebUI, you need a domain pointing at the VPS — add an A record `hermes.example.com → <vps-ip>`.
@@ -54,5 +64,6 @@ What to back up at minimum: `/home/hermes/.hermes` (inside the `hermes_data` Doc
 | Symptom | Check |
 |---|---|
 | Script aborts: `Debian/Ubuntu only` | `cat /etc/os-release` — only `ID=debian` or `ID=ubuntu` is supported. |
-| Script aborts: `refusing to harden SSH: no SSH keys` | Provider didn't inject your key, or hermes user wasn't created from a sudo-with-keys session. Add the key manually to `/home/hermes/.ssh/authorized_keys` before re-running. |
-| Can't log in as hermes after script | Did the script complete `[OK] copied authorized_keys for hermes`? If not, copy it manually: `cp /root/.ssh/authorized_keys /home/hermes/.ssh/authorized_keys && chown hermes:hermes ...` |
+| `[WARN] skipping SSH hardening: hermes has no SSH keys` | Provider didn't inject your key. Re-run with `HERMES_SSH_KEY="ssh-ed25519 AAAA... you@host" sudo ./scripts/setup-server.sh`. |
+| Can't log in as hermes after script | Confirm with `sudo cat /home/hermes/.ssh/authorized_keys` that the right key is there. If not, re-run setup-server with `HERMES_SSH_KEY=...`. |
+| `/home/hermes/hermes-setup` missing after running as root | The copy step (`ensure_repo_in_hermes_home`) only fires when hermes already exists. Re-run `sudo ./scripts/setup-server.sh` from your original clone — it's idempotent. |
