@@ -65,3 +65,13 @@ EOF
   [ "$status" -eq 0 ]
   rm -f "$tmp"
 }
+
+@test "env_var_set_in_file is not vulnerable to regex injection in the key" {
+  local tmp; tmp=$(mktemp)
+  echo "OTHER=value" > "$tmp"
+  # A key like 'FOO|OTHER' must NOT match the OTHER line — historically a
+  # naive grep -E "${key}=..." would interpret | as alternation.
+  run env_var_set_in_file "$tmp" 'FOO|OTHER'
+  [ "$status" -eq 1 ]
+  rm -f "$tmp"
+}

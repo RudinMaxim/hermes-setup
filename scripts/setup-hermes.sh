@@ -115,8 +115,16 @@ ensure_network() {
 }
 
 ensure_compose_up() {
-  if docker_container_exists hermes && docker_container_running hermes; then
+  if docker_container_running hermes; then
     log_skip "container 'hermes' already running"
+    return 0
+  fi
+  if docker_container_exists hermes; then
+    # Container exists but is stopped/exited. `compose up` would fail with
+    # 'container name already in use' — start it explicitly instead.
+    log_act "starting existing 'hermes' container"
+    docker start hermes >/dev/null
+    log_ok "container 'hermes' started"
     return 0
   fi
   log_act "docker compose up -d hermes"

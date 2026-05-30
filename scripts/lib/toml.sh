@@ -35,7 +35,13 @@ toml_get() {
       if (lhs == k) {
         rhs=$0
         sub(/^[^=]*=/, "", rhs)
-        sub(/[[:space:]]+#.*$/, "", rhs)
+        # Strip inline comments — but only when the value is NOT quoted, so
+        # quoted strings containing # are preserved (e.g. passwords like "a #b").
+        tmp=rhs
+        sub(/^[[:space:]]+/, "", tmp)
+        if (substr(tmp, 1, 1) != "\"") {
+          sub(/[[:space:]]+#.*$/, "", rhs)
+        }
         print rhs
         exit
       }

@@ -16,7 +16,7 @@ Idempotent bash installer for [Hermes Agent](https://hermes-agent.nousresearch.c
 ssh root@<vps-ip>
 
 # 2. Clone this repo.
-git clone <repo-url> hermes-setup
+git clone https://github.com/RudinMaxim/hermes-setup.git hermes-setup
 cd hermes-setup
 
 # 3. Run the server preparation. Creates the 'hermes' user, installs Docker,

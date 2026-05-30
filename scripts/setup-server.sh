@@ -85,9 +85,12 @@ ensure_sudoers() {
   content=$(cat <<'EOF'
 # Managed by hermes-setup. Allows the 'hermes' user to manage the Hermes service
 # without a password — no other privileges.
+#
+# Wildcards are intentionally absent: a `journalctl -u hermes *` rule would let
+# 'hermes' pass flags like --file=/var/log/journal/...system.journal to read
+# arbitrary root-owned journal files. Use `docker logs hermes` for live logs.
 hermes ALL=(root) NOPASSWD: /bin/systemctl restart hermes
 hermes ALL=(root) NOPASSWD: /bin/systemctl status hermes
-hermes ALL=(root) NOPASSWD: /bin/journalctl -u hermes *
 EOF
 )
   write_file_idempotent "$target" "$content" 0440

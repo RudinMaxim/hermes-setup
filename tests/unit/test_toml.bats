@@ -82,3 +82,27 @@ teardown() {
   run toml_get "$TMP" github nope
   [ "$status" -ne 0 ]
 }
+
+@test "toml_get preserves '#' inside quoted strings" {
+  local f; f=$(mktemp)
+  cat >"$f" <<'EOF'
+[postgres]
+url = "postgresql://user:p#ass@host/db"
+EOF
+  run toml_get "$f" postgres url
+  [ "$status" -eq 0 ]
+  [[ "$output" == "postgresql://user:p#ass@host/db" ]]
+  rm -f "$f"
+}
+
+@test "toml_get still strips inline comments on UNquoted values" {
+  local f; f=$(mktemp)
+  cat >"$f" <<'EOF'
+[s]
+port = 9001 # http port
+EOF
+  run toml_get "$f" s port
+  [ "$status" -eq 0 ]
+  [[ "$output" == "9001" ]]
+  rm -f "$f"
+}

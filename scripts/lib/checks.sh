@@ -44,8 +44,24 @@ docker_volume_present() {
 env_var_set_in_file() {
   local file="$1" key="$2"
   [[ -f "$file" ]] || return 1
-  # Match: optional leading whitespace, KEY=NONEMPTY (not just whitespace)
-  grep -qE "^[[:space:]]*${key}=[^[:space:]].*\$" "$file"
+  # awk with a literal key match avoids regex injection from $key
+  # (a key like "FOO|BAR" must NOT match a line with KEY=BAR).
+  awk -v k="$key" '
+    {
+      sub(/^[[:space:]]+/, "")
+      if ($0 ~ /^#/) next
+      eq = index($0, "=")
+      if (eq == 0) next
+      lhs = substr($0, 1, eq-1)
+      sub(/[[:space:]]+$/, "", lhs)
+      if (lhs != k) next
+      rhs = substr($0, eq+1)
+      sub(/^[[:space:]]+/, "", rhs)
+      sub(/[[:space:]]+$/, "", rhs)
+      if (rhs != "") { found = 1; exit }
+    }
+    END { exit (found ? 0 : 1) }
+  ' "$file"
 }
 
 ufw_rule_present() {

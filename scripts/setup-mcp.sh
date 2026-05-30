@@ -41,11 +41,12 @@ enabled_mcps() {
 disabled_mcps_to_remove() {
   local registered s
   registered=$(docker exec hermes hermes mcp list --quiet 2>/dev/null | awk 'NF{print $1}') || return 0
-  for s in $registered; do
+  while IFS= read -r s; do
+    [[ -z "$s" ]] && continue
     if ! toml_get_bool "$TOML" "$s" enabled; then
       printf '%s\n' "$s"
     fi
-  done
+  done <<<"$registered"
 }
 
 check_required_env() {
@@ -72,13 +73,24 @@ mcp_registered_in_hermes() {
 }
 
 npm_pkg_installed() {
-  docker exec hermes bash -c "npm list -g --depth=0 2>/dev/null | grep -q '$1'"
+  # Pass package name as argv so it can't escape into shell parsing; grep -F
+  # for literal matching (no regex metacharacters).
+  docker exec hermes bash -c \
+    'npm list -g --depth=0 2>/dev/null | grep -qF -- "$1"' _ "$1"
+}
+
+# Validate package name before we hand it to any shell — only allow npm-safe chars.
+require_safe_pkg_name() {
+  local pkg="$1"
+  [[ "$pkg" =~ ^[@a-zA-Z0-9._/-]+$ ]] || \
+    die "rejecting unsafe package name '$pkg' — must match @a-zA-Z0-9._/-"
 }
 
 deploy_stdio_mcp() {
   local mcp="$1"
   local pkg
   pkg=$(toml_get "$TOML" "$mcp" package) || die "mcp.$mcp: missing 'package'"
+  require_safe_pkg_name "$pkg"
 
   if npm_pkg_installed "$pkg"; then
     log_skip "mcp.$mcp: $pkg already installed in hermes container"
@@ -137,7 +149,18 @@ main() {
 
     if [[ "$mcp" == "docker_mcp" ]]; then
       if ! toml_get_bool "$TOML" docker_mcp acknowledge_socket_risk; then
-        log_warn "mcp.docker_mcp: skipped — set acknowledge_socket_risk = true in mcp.toml to opt-in (mounts /var/run/docker.sock which is root-equivalent)"
+        log_warn "mcp.docker_mcp: skipped — set acknowledge_socket_risk = true in mcp.toml to opt-in (gives the MCP root-equivalent host access via /var/run/docker.sock)"
+        continue
+      fi
+      # Verify the hermes container actually has /var/run/docker.sock mounted
+      # in — otherwise the MCP starts but every call fails with 'no such file'.
+      # We don't auto-edit compose because it requires a container recreate;
+      # ask the user to do it explicitly.
+      if ! docker inspect -f \
+          '{{range .Mounts}}{{.Destination}}{{"\n"}}{{end}}' hermes 2>/dev/null \
+          | grep -qx '/var/run/docker.sock'; then
+        log_warn "mcp.docker_mcp: skipped — /var/run/docker.sock is NOT mounted into the hermes container. Add the following under hermes.volumes in config/docker-compose.yml, then 'docker compose -f config/docker-compose.yml up -d --force-recreate':"
+        log_warn "        - /var/run/docker.sock:/var/run/docker.sock"
         continue
       fi
     fi
@@ -151,8 +174,17 @@ main() {
     case "$transport" in
       stdio) deploy_stdio_mcp "$mcp" ;;
       http)  deploy_http_mcp "$mcp" ;;
-      *)     log_warn "mcp.$mcp: unknown transport '$transport' — skipping" ;;
+      *)     log_warn "mcp.$mcp: unknown transport '$transport' — skipping"; continue ;;
     esac
+
+    # Smoke-test the registration. Some Hermes builds may not implement
+    # `mcp test`; we treat anything other than a non-zero subcommand-missing
+    # exit as informational.
+    if docker exec hermes hermes mcp test "$mcp" >/dev/null 2>&1; then
+      log_ok "mcp.$mcp: smoke-test passed"
+    else
+      log_warn "mcp.$mcp: smoke-test did not pass (mcp may still work; check 'docker exec hermes hermes mcp test $mcp' manually)"
+    fi
   done < <(enabled_mcps)
 
   local stale
