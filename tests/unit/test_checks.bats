@@ -16,8 +16,8 @@ setup() {
   [ "$status" -eq 1 ]
 }
 
-@test "has_user returns 0 for existing user (root)" {
-  run has_user root
+@test "has_user returns 0 for the current user" {
+  run has_user "$(id -un)"
   [ "$status" -eq 0 ]
 }
 
@@ -27,7 +27,7 @@ setup() {
 }
 
 @test "user_in_group returns 1 when user not in group" {
-  run user_in_group root nobody
+  run user_in_group "$(id -un)" no-such-group-xyz-12345
   [ "$status" -eq 1 ]
 }
 
