@@ -162,16 +162,18 @@ first_run_init() {
   else
     log_warn "hermes setup --non-interactive not supported by this build — skipping first-run init"
   fi
-  if docker exec hermes hermes config get redact_secrets &>/dev/null; then
-    if [[ "$(docker exec hermes hermes config get redact_secrets 2>/dev/null)" == "true" ]]; then
-      log_skip "redact_secrets already true"
-    else
-      log_act "setting redact_secrets=true"
-      docker exec hermes hermes config set redact_secrets true >/dev/null
-      log_ok "redact_secrets enabled"
-    fi
+  # hermes has no `config get` subcommand — read via `config show` and parse.
+  # Match a line like "redact_secrets: true" (YAML-ish output).
+  if docker exec hermes hermes config show 2>/dev/null \
+       | grep -qE '^[[:space:]]*redact_secrets:[[:space:]]*true([[:space:]]|$)'; then
+    log_skip "redact_secrets already true"
   else
-    log_warn "hermes config get redact_secrets not supported — skipping"
+    log_act "setting redact_secrets=true"
+    if docker exec hermes hermes config set redact_secrets true >/dev/null 2>&1; then
+      log_ok "redact_secrets enabled"
+    else
+      log_warn "could not set redact_secrets (check 'docker exec hermes hermes config set redact_secrets true')"
+    fi
   fi
 }
 
