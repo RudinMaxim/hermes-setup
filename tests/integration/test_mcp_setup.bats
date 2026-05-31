@@ -70,6 +70,44 @@ STUB
   rm -rf /tmp/bin-stub
 }
 
+@test "setup-mcp.sh fills missing keys in an existing google_drive section" {
+  cat >"$REPO_ROOT/config/mcp.toml" <<'TOML'
+[google_drive]
+enabled = true
+TOML
+
+  mkdir -p /tmp/bin-stub
+  cat >/tmp/bin-stub/docker <<'STUB'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "ps -a") echo hermes ;;
+  "inspect -f") echo running ;;
+  "exec -i")
+    shift 3
+    case "$*" in
+      "python3 -") echo "" ;;
+      *) echo "" ;;
+    esac ;;
+  *) echo "stub: $*" ;;
+esac
+STUB
+  chmod +x /tmp/bin-stub/docker
+
+  run su hermes -c "PATH=/tmp/bin-stub:$PATH bash '$SCRIPTS/setup-mcp.sh'"
+  [ "$status" -eq 0 ]
+  grep -q '^enabled = true$' "$REPO_ROOT/config/mcp.toml"
+  grep -q '^transport = "http"$' "$REPO_ROOT/config/mcp.toml"
+  grep -q '^url = "https://drivemcp.googleapis.com/mcp/v1"$' "$REPO_ROOT/config/mcp.toml"
+  grep -q '^auth = "oauth"$' "$REPO_ROOT/config/mcp.toml"
+  grep -q '^oauth_client_id_env = "GOOGLE_DRIVE_OAUTH_CLIENT_ID"$' "$REPO_ROOT/config/mcp.toml"
+  grep -q '^oauth_client_secret_env = "GOOGLE_DRIVE_OAUTH_CLIENT_SECRET"$' "$REPO_ROOT/config/mcp.toml"
+  grep -q '^requires = \["GOOGLE_DRIVE_OAUTH_CLIENT_ID", "GOOGLE_DRIVE_OAUTH_CLIENT_SECRET"\]$' "$REPO_ROOT/config/mcp.toml"
+  [[ "$output" == *"updated mcp.google_drive in config/mcp.toml from example"* ]]
+  [[ "$output" == *"mcp.google_drive: missing GOOGLE_DRIVE_OAUTH_CLIENT_ID GOOGLE_DRIVE_OAUTH_CLIENT_SECRET"* ]]
+
+  rm -rf /tmp/bin-stub
+}
+
 @test "setup-mcp.sh installs npm package + registers stdio MCP" {
   sed -i '/^\[github\]/,/^$/ s|^enabled = false$|enabled = true|' "$REPO_ROOT/config/mcp.toml"
   sed -i 's|^GITHUB_TOKEN=$|GITHUB_TOKEN=ghp_test|' "$REPO_ROOT/config/.env"
