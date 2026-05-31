@@ -36,6 +36,13 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
+@test "setup-hermes.sh accepts OPENROUTER_API_KEY alone" {
+  cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
+  sed -i 's|^OPENROUTER_API_KEY=|OPENROUTER_API_KEY=sk-or-test|' "$REPO_ROOT/config/.env"
+  run su hermes -c "bash '$SCRIPTS/setup-hermes.sh' --configs-only"
+  [ "$status" -eq 0 ]
+}
+
 @test "setup-hermes.sh creates the data volume and network" {
   cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
   sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"

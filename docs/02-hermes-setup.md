@@ -8,7 +8,24 @@ cd ~/hermes-setup
 
 ## Required: at least one LLM key in config/.env
 
-The script aborts unless either `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is set and non-empty in `config/.env`.
+The script aborts unless one of `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY` is set and non-empty in `config/.env`.
+
+### OpenRouter
+1. https://openrouter.ai/keys → create an API key.
+2. Copy the `sk-or-...` value.
+3. Edit `config/.env`:
+   ```
+   OPENROUTER_API_KEY=sk-or-yourkeyhere
+   ```
+
+By default `setup-hermes.sh` writes this Hermes model config:
+```yaml
+model:
+  provider: openrouter
+  default: openai/gpt-5.4-mini
+```
+
+Override it with `HERMES_MODEL_PROVIDER` and `HERMES_MODEL` in `config/.env`.
 
 ### OpenAI
 1. https://platform.openai.com/api-keys → **Create new secret key**.
@@ -88,4 +105,5 @@ set `HERMES_NONINTERACTIVE=1`) to disable all prompts for scripted runs.
 | `current user not in 'docker' group` | After `setup-server.sh` you must log out and back in (group membership is per-session). Or run `newgrp docker`. |
 | Image pull fails, falls back to local build, build takes a long time | First build can be 5-10 min. Subsequent runs are cached. The fallback build uses `HERMES_FALLBACK_BASE_IMAGE` from `config/.env`, defaulting to `public.ecr.aws/docker/library/ubuntu:26.04` to avoid Docker Hub anonymous rate limits for the Ubuntu base image. |
 | Container restarts in a loop | `docker logs --tail=100 hermes`. Common: missing/invalid LLM key (Hermes exits if model can't be initialised). |
+| Hermes still uses the old model | Re-run `./scripts/setup-hermes.sh`; it rewrites `/home/hermes/.hermes/config.yaml` from `HERMES_MODEL_PROVIDER` and `HERMES_MODEL` in `config/.env`. |
 | `hermes did not become healthy in 30s` | Check `docker logs hermes` for startup errors. If the network is slow, increase the loop in `scripts/setup-hermes.sh::wait_for_health`. |

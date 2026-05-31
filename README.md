@@ -33,7 +33,11 @@ sudo ./scripts/setup-server.sh
 # 4. Переключись на hermes, заполни LLM-ключ и запусти Hermes.
 su - hermes
 cd ~/hermes-setup
-nano config/.env          # укажи OPENAI_API_KEY=... или ANTHROPIC_API_KEY=...
+nano config/.env          # укажи OPENROUTER_API_KEY=..., OPENAI_API_KEY=... или ANTHROPIC_API_KEY=...
+# По умолчанию Hermes будет настроен на OpenRouter:
+#   HERMES_MODEL_PROVIDER=openrouter
+#   HERMES_MODEL=openai/gpt-5.4-mini
+# Для этого укажи OPENROUTER_API_KEY=...
 # Опционально: поменяй HERMES_PROJECTS_DIR, если Filesystem MCP должен открыть другую host-директорию.
 ./scripts/setup-hermes.sh
 

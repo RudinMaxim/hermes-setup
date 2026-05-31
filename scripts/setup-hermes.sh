@@ -32,6 +32,8 @@ done
 DEFAULT_IMAGE="nousresearch/hermes-agent:latest"
 LOCAL_IMAGE="hermes-agent:local"
 DEFAULT_FALLBACK_BASE_IMAGE="public.ecr.aws/docker/library/ubuntu:26.04"
+DEFAULT_MODEL_PROVIDER="openrouter"
+DEFAULT_MODEL="openai/gpt-5.4-mini"
 HERMES_IMAGE=""
 
 require_non_root() {
@@ -78,15 +80,17 @@ ensure_configs() {
 }
 
 ensure_llm_key() {
-  if env_var_set_in_file "$ENVFILE" OPENAI_API_KEY \
+  if env_var_set_in_file "$ENVFILE" OPENROUTER_API_KEY \
+     || env_var_set_in_file "$ENVFILE" OPENAI_API_KEY \
      || env_var_set_in_file "$ENVFILE" ANTHROPIC_API_KEY; then
     log_ok "LLM API key present in .env"
     return 0
   fi
   if is_interactive; then
     local provider var key
-    provider=$(prompt_value "LLM provider (openai/anthropic)")
+    provider=$(prompt_value "LLM provider (openrouter/openai/anthropic)")
     case "$provider" in
+      openrouter|OpenRouter|OPENROUTER) var=OPENROUTER_API_KEY ;;
       anthropic|Anthropic|ANTHROPIC) var=ANTHROPIC_API_KEY ;;
       *)                             var=OPENAI_API_KEY ;;
     esac
@@ -97,7 +101,7 @@ ensure_llm_key() {
     log_ok "$var saved to .env (${#key} chars)"
     return 0
   fi
-  die "no LLM API key configured — set OPENAI_API_KEY or ANTHROPIC_API_KEY in $ENVFILE (see docs/02-hermes-setup.md)"
+  die "no LLM API key configured — set OPENROUTER_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY in $ENVFILE (see docs/02-hermes-setup.md)"
 }
 
 run_fallback_build() {
@@ -277,6 +281,50 @@ first_run_init() {
   fi
 }
 
+ensure_model_config() {
+  local provider model
+  provider="${HERMES_MODEL_PROVIDER:-$(read_env_value "$ENVFILE" HERMES_MODEL_PROVIDER 2>/dev/null || printf '%s' "$DEFAULT_MODEL_PROVIDER")}"
+  model="${HERMES_MODEL:-$(read_env_value "$ENVFILE" HERMES_MODEL 2>/dev/null || printf '%s' "$DEFAULT_MODEL")}"
+
+  log_act "setting Hermes model default to $provider/$model"
+  local rc
+  set +e
+  docker exec -i hermes python3 - "$provider" "$model" <<'PY'
+import os
+import sys
+from pathlib import Path
+
+import yaml
+
+provider, model = sys.argv[1:3]
+path = Path("/home/hermes/.hermes/config.yaml")
+path.parent.mkdir(parents=True, exist_ok=True)
+
+try:
+    config = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else {}
+except Exception:
+    config = {}
+
+if not isinstance(config, dict):
+    config = {}
+
+current = config.get("model")
+desired = {"provider": provider, "default": model}
+if current == desired:
+    raise SystemExit(2)
+
+config["model"] = desired
+path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+PY
+  rc=$?
+  set -e
+  case "$rc" in
+    0) log_ok "Hermes model default set to $provider/$model" ;;
+    2) log_skip "Hermes model default already $provider/$model" ;;
+    *) die "could not update Hermes model config" ;;
+  esac
+}
+
 main() {
   require_non_root
   ensure_configs
@@ -298,6 +346,7 @@ main() {
   ensure_compose_up
   wait_for_health
   first_run_init
+  ensure_model_config
   log_ok "hermes setup complete"
   log_ok "next: edit config/mcp.toml to enable MCP servers, then run ./scripts/setup-mcp.sh"
 }

@@ -52,9 +52,14 @@ case "$1 $2" in
     case "$*" in
       "bash -c npm list -g --depth=0 2>/dev/null | grep"*) exit 1 ;;
       "npm install -g "*) echo "installed" ;;
-      "hermes mcp list --quiet") echo "" ;;
-      "hermes mcp add"*) echo "added: $*" ;;
       *) echo "exec-stub: $*" ;;
+    esac ;;
+  "exec -i")
+    shift 3
+    case "$*" in
+      "python3 - github") exit 1 ;;
+      "python3 - github stdio npx "*"GITHUB_TOKEN"*) echo "configured: $*" ;;
+      *) echo "exec-i-stub: $*" ;;
     esac ;;
   *) echo "stub: $*" ;;
 esac
@@ -79,8 +84,13 @@ case "$1 $2" in
   "exec hermes")
     shift 2
     case "$*" in
-      "hermes mcp list --quiet") echo github ;;
-      "hermes mcp remove "*) echo "removed"; touch /tmp/.removed ;;
+      *) echo "" ;;
+    esac ;;
+  "exec -i")
+    shift 3
+    case "$*" in
+      "python3 -") echo github ;;
+      "python3 - github") touch /tmp/.removed ;;
       *) echo "" ;;
     esac ;;
   *) echo "stub: $*" ;;
@@ -107,9 +117,14 @@ case "$1 $2" in
   "exec hermes")
     shift 2
     case "$*" in
-      "hermes mcp list --quiet") printf 'github\nmanual_server\n' ;;
-      "hermes mcp remove github") echo github >> /tmp/.removed ;;
-      "hermes mcp remove manual_server") echo manual_server >> /tmp/.removed ;;
+      *) echo "" ;;
+    esac ;;
+  "exec -i")
+    shift 3
+    case "$*" in
+      "python3 -") printf 'github\nmanual_server\n' ;;
+      "python3 - github") echo github >> /tmp/.removed ;;
+      "python3 - manual_server") echo manual_server >> /tmp/.removed ;;
       *) echo "" ;;
     esac ;;
   *) echo "stub: $*" ;;
@@ -142,10 +157,15 @@ case "$1 $2" in
     case "$*" in
       "bash -c npm list -g --depth=0 2>/dev/null | grep"*) exit 1 ;;
       "npm install -g "*) echo installed ;;
-      "hermes mcp list --quiet") echo "" ;;
-      "hermes mcp add"*) printf '%s\n' "$*" > /tmp/.mcp-add ;;
       "hermes mcp test filesystem") exit 0 ;;
       *) echo "exec-stub: $*" ;;
+    esac ;;
+  "exec -i")
+    shift 3
+    case "$*" in
+      "python3 - filesystem") exit 1 ;;
+      "python3 - filesystem stdio npx "*"@modelcontextprotocol/server-filesystem"*) printf '%s\n' "$*" > /tmp/.mcp-add ;;
+      *) echo "exec-i-stub: $*" ;;
     esac ;;
   *) echo "stub: $*" ;;
 esac
@@ -155,8 +175,8 @@ STUB
 
   run su hermes -c "PATH=/tmp/bin-stub:$PATH bash '$SCRIPTS/setup-mcp.sh'"
   [ "$status" -eq 0 ]
-  grep -q -- '--command npx' /tmp/.mcp-add
-  grep -q -- '--args -y @modelcontextprotocol/server-filesystem /home/hermes/projects' /tmp/.mcp-add
+  grep -q -- 'filesystem stdio npx' /tmp/.mcp-add
+  grep -q -- '-y @modelcontextprotocol/server-filesystem /home/hermes/projects' /tmp/.mcp-add
 
   rm -rf /tmp/bin-stub /tmp/.mcp-add
 }

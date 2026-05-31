@@ -47,9 +47,26 @@ enabled_mcps() {
   done
 }
 
+configured_mcps_in_hermes() {
+  docker exec -i hermes python3 - <<'PY' 2>/dev/null || true
+from pathlib import Path
+
+import yaml
+
+path = Path("/home/hermes/.hermes/config.yaml")
+if not path.exists():
+    raise SystemExit(0)
+config = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+servers = config.get("mcp_servers") or {}
+if isinstance(servers, dict):
+    for name in servers:
+        print(name)
+PY
+}
+
 disabled_mcps_to_remove() {
   local registered s
-  registered=$(docker exec hermes hermes mcp list --quiet 2>/dev/null | awk 'NF{print $1}') || return 0
+  registered=$(configured_mcps_in_hermes) || return 0
   while IFS= read -r s; do
     [[ -z "$s" ]] && continue
     if toml_sections "$TOML" | grep -qxF -- "$s" && ! toml_get_bool "$TOML" "$s" enabled; then
@@ -76,9 +93,21 @@ check_required_env() {
 }
 
 mcp_registered_in_hermes() {
-  docker exec hermes hermes mcp list --quiet 2>/dev/null \
-    | awk 'NF{print $1}' \
-    | grep -qxF -- "$1"
+  docker exec -i hermes python3 - "$1" <<'PY' 2>/dev/null
+import sys
+from pathlib import Path
+
+import yaml
+
+name = sys.argv[1]
+path = Path("/home/hermes/.hermes/config.yaml")
+if not path.exists():
+    raise SystemExit(1)
+config = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+server = (config.get("mcp_servers") or {}).get(name)
+if not isinstance(server, dict) or server.get("enabled", True) is False:
+    raise SystemExit(1)
+PY
 }
 
 npm_pkg_installed() {
@@ -93,6 +122,76 @@ require_safe_pkg_name() {
   local pkg="$1"
   [[ "$pkg" =~ ^[@a-zA-Z0-9._/-]+$ ]] || \
     die "rejecting unsafe package name '$pkg' — must match @a-zA-Z0-9._/-"
+}
+
+write_hermes_mcp_config() {
+  local mcp="$1" transport="$2" command="$3" url="$4" env_csv="$5"
+  shift 5
+  docker exec -i hermes python3 - "$mcp" "$transport" "$command" "$url" "$env_csv" "$@" <<'PY'
+import os
+import sys
+from pathlib import Path
+
+import yaml
+
+name, transport, command, url, env_csv, *cmd_args = sys.argv[1:]
+path = Path("/home/hermes/.hermes/config.yaml")
+path.parent.mkdir(parents=True, exist_ok=True)
+
+try:
+    config = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else {}
+except Exception:
+    config = {}
+
+if not isinstance(config, dict):
+    config = {}
+
+servers = config.setdefault("mcp_servers", {})
+server = {"enabled": True}
+if transport == "http":
+    server["url"] = url
+else:
+    server["command"] = command
+    server["args"] = cmd_args
+
+env_names = [item for item in env_csv.split(",") if item]
+if env_names:
+    server["env"] = {item: "${" + item + "}" for item in env_names}
+
+if servers.get(name) == server:
+    raise SystemExit(2)
+
+servers[name] = server
+path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+PY
+}
+
+remove_hermes_mcp_config() {
+  local mcp="$1"
+  docker exec -i hermes python3 - "$mcp" <<'PY'
+import sys
+from pathlib import Path
+
+import yaml
+
+name = sys.argv[1]
+path = Path("/home/hermes/.hermes/config.yaml")
+if not path.exists():
+    raise SystemExit(2)
+
+config = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+servers = config.get("mcp_servers") or {}
+if name not in servers:
+    raise SystemExit(2)
+
+del servers[name]
+if servers:
+    config["mcp_servers"] = servers
+else:
+    config.pop("mcp_servers", None)
+
+path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+PY
 }
 
 deploy_stdio_mcp() {
@@ -113,10 +212,10 @@ deploy_stdio_mcp() {
     log_skip "mcp.$mcp: already registered in hermes"
   else
     log_act "registering mcp '$mcp'"
-    local env_args=() cmd_args=() req
+    local env_names=() cmd_args=() req env_csv rc
     while IFS= read -r req; do
       [[ -z "$req" ]] && continue
-      env_args+=(--env "$req")
+      env_names+=("$req")
     done < <(toml_get_array "$TOML" "$mcp" requires)
     cmd_args=(-y "$pkg")
     if [[ "$mcp" == "filesystem" ]]; then
@@ -124,9 +223,16 @@ deploy_stdio_mcp() {
       mount=$(toml_get "$TOML" "$mcp" mount) || die "mcp.$mcp: missing 'mount'"
       cmd_args+=("$mount")
     fi
-    docker exec hermes hermes mcp add "$mcp" \
-      --command npx "${env_args[@]}" --args "${cmd_args[@]}" >/dev/null
-    log_ok "registered mcp '$mcp'"
+    env_csv=$(IFS=,; printf '%s' "${env_names[*]}")
+    set +e
+    write_hermes_mcp_config "$mcp" stdio npx "" "$env_csv" "${cmd_args[@]}"
+    rc=$?
+    set -e
+    case "$rc" in
+      0) log_ok "registered mcp '$mcp'" ;;
+      2) log_skip "mcp.$mcp: already registered in hermes" ;;
+      *) die "mcp.$mcp: could not write Hermes MCP config" ;;
+    esac
   fi
 }
 
@@ -148,9 +254,16 @@ deploy_http_mcp() {
     log_skip "mcp.$mcp: already registered in hermes"
   else
     log_act "registering mcp '$mcp' (http)"
-    docker exec hermes hermes mcp add "$mcp" \
-      --url "http://$service:$port" >/dev/null
-    log_ok "registered mcp '$mcp'"
+    local rc
+    set +e
+    write_hermes_mcp_config "$mcp" http "" "http://$service:$port" ""
+    rc=$?
+    set -e
+    case "$rc" in
+      0) log_ok "registered mcp '$mcp'" ;;
+      2) log_skip "mcp.$mcp: already registered in hermes" ;;
+      *) die "mcp.$mcp: could not write Hermes MCP config" ;;
+    esac
   fi
 }
 
@@ -202,12 +315,19 @@ main() {
     fi
   done < <(enabled_mcps)
 
-  local stale
+  local stale rc
   while IFS= read -r stale; do
     [[ -z "$stale" ]] && continue
     log_act "unregistering mcp '$stale' (no longer enabled in mcp.toml)"
-    docker exec hermes hermes mcp remove "$stale" >/dev/null
-    log_ok "unregistered mcp '$stale'"
+    set +e
+    remove_hermes_mcp_config "$stale"
+    rc=$?
+    set -e
+    case "$rc" in
+      0) log_ok "unregistered mcp '$stale'" ;;
+      2) log_skip "mcp.$stale: already absent from Hermes config" ;;
+      *) die "mcp.$stale: could not update Hermes MCP config" ;;
+    esac
   done < <(disabled_mcps_to_remove)
 
   log_ok "mcp sync complete"
