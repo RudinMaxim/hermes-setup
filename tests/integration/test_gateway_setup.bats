@@ -96,3 +96,20 @@ enable_telegram() {
   [[ "$output" == *"back to idle"* ]]
   ! grep -q 'gateway run' "$STATE"
 }
+
+@test "setup.sh runs the hermes step and completes (non-interactive, as hermes)" {
+  cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
+  sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"
+  chown hermes "$REPO_ROOT/config/.env"
+  run su hermes -c "HERMES_NONINTERACTIVE=1 bash '$REPO_ROOT/setup.sh' --non-interactive --configs-only"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"running setup-hermes.sh"* ]]
+  [[ "$output" == *"setup complete"* ]]
+}
+
+@test "setup.sh warns when run as root" {
+  # As root the orchestrator prints the warning, then setup-hermes refuses to
+  # run as root — we only assert the warning is shown.
+  run bash "$REPO_ROOT/setup.sh" --non-interactive
+  [[ "$output" == *"run setup-server.sh as root separately"* ]]
+}

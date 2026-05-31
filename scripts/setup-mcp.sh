@@ -18,6 +18,15 @@ source "$SCRIPT_DIR/lib/checks.sh"
 # shellcheck source=lib/toml.sh
 source "$SCRIPT_DIR/lib/toml.sh"
 
+# setup-mcp has no prompts of its own yet; --non-interactive is accepted only so
+# the setup.sh orchestrator can pass "$@" through without aborting on it.
+for arg in "$@"; do
+  case "$arg" in
+    --non-interactive) export HERMES_NONINTERACTIVE=1 ;;
+    *) die "unknown argument: $arg" ;;
+  esac
+done
+
 require_hermes_running() {
   if ! docker_container_running hermes; then
     die "hermes container is not running — run scripts/setup-hermes.sh first"
