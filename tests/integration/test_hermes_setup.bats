@@ -103,6 +103,88 @@ STUB
   rm -rf /tmp/bin-stub
 }
 
+@test "setup-hermes.sh builds fallback image from the Ubuntu 26.04 Docker Hub mirror base" {
+  cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
+  sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"
+
+  mkdir -p /tmp/bin-stub
+  cat >/tmp/bin-stub/docker <<'STUB'
+#!/usr/bin/env bash
+case "$1" in
+  info) exit 0 ;;
+  image) exit 1 ;;
+  pull) exit 1 ;;
+  build) printf '%s\n' "$*" > /tmp/.hermes-build-args; exit 0 ;;
+  *) echo "stub: $*" ;;
+esac
+STUB
+  chmod +x /tmp/bin-stub/docker
+
+  run su hermes -c "PATH=/tmp/bin-stub:$PATH HERMES_NO_COMPOSE=1 bash '$SCRIPTS/setup-hermes.sh'"
+  [ "$status" -eq 0 ]
+  grep -q -- '--build-arg BASE_IMAGE=public.ecr.aws/docker/library/ubuntu:26.04' /tmp/.hermes-build-args
+
+  rm -rf /tmp/bin-stub /tmp/.hermes-build-args
+}
+
+@test "setup-hermes.sh lets config override the fallback base image" {
+  cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
+  sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"
+  sed -i 's|^HERMES_FALLBACK_BASE_IMAGE=.*|HERMES_FALLBACK_BASE_IMAGE=ubuntu:24.04|' "$REPO_ROOT/config/.env"
+
+  mkdir -p /tmp/bin-stub
+  cat >/tmp/bin-stub/docker <<'STUB'
+#!/usr/bin/env bash
+case "$1" in
+  info) exit 0 ;;
+  image) exit 1 ;;
+  pull) exit 1 ;;
+  build) printf '%s\n' "$*" > /tmp/.hermes-build-args; exit 0 ;;
+  *) echo "stub: $*" ;;
+esac
+STUB
+  chmod +x /tmp/bin-stub/docker
+
+  run su hermes -c "PATH=/tmp/bin-stub:$PATH HERMES_NO_COMPOSE=1 bash '$SCRIPTS/setup-hermes.sh'"
+  [ "$status" -eq 0 ]
+  grep -q -- '--build-arg BASE_IMAGE=ubuntu:24.04' /tmp/.hermes-build-args
+
+  rm -rf /tmp/bin-stub /tmp/.hermes-build-args
+}
+
+@test "setup-hermes.sh explains Docker Hub rate limits during fallback build" {
+  cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
+  sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"
+  sed -i 's|^HERMES_FALLBACK_BASE_IMAGE=.*|HERMES_FALLBACK_BASE_IMAGE=ubuntu:24.04|' "$REPO_ROOT/config/.env"
+
+  mkdir -p /tmp/bin-stub
+  cat >/tmp/bin-stub/docker <<'STUB'
+#!/usr/bin/env bash
+case "$1" in
+  info) exit 0 ;;
+  image) exit 1 ;;
+  pull) exit 1 ;;
+  build)
+    cat >&2 <<'EOF'
+ERROR: failed to build: failed to solve: ubuntu:24.04: failed to resolve source metadata for docker.io/library/ubuntu:24.04: unexpected status from GET request: 429 Too Many Requests
+toomanyrequests: You have reached your unauthenticated pull rate limit.
+EOF
+    exit 1
+    ;;
+  *) echo "stub: $*" ;;
+esac
+STUB
+  chmod +x /tmp/bin-stub/docker
+
+  run su hermes -c "PATH=/tmp/bin-stub:$PATH HERMES_NO_COMPOSE=1 bash '$SCRIPTS/setup-hermes.sh'"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Docker Hub anonymous pull rate limit"* ]]
+  [[ "$output" == *"current fallback base image: ubuntu:24.04"* ]]
+  [[ "$output" == *"HERMES_FALLBACK_BASE_IMAGE=public.ecr.aws/docker/library/ubuntu:26.04"* ]]
+
+  rm -rf /tmp/bin-stub
+}
+
 @test "setup-hermes.sh recreates a running container when the projects mount is missing" {
   cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
   sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"

@@ -31,6 +31,7 @@ done
 
 DEFAULT_IMAGE="nousresearch/hermes-agent:latest"
 LOCAL_IMAGE="hermes-agent:local"
+DEFAULT_FALLBACK_BASE_IMAGE="public.ecr.aws/docker/library/ubuntu:26.04"
 HERMES_IMAGE=""
 
 require_non_root() {
@@ -99,6 +100,30 @@ ensure_llm_key() {
   die "no LLM API key configured — set OPENAI_API_KEY or ANTHROPIC_API_KEY in $ENVFILE (see docs/02-hermes-setup.md)"
 }
 
+run_fallback_build() {
+  local fallback_base_image="$1"
+  local build_log
+  build_log=$(mktemp)
+
+  if docker build --build-arg "BASE_IMAGE=$fallback_base_image" -t "$LOCAL_IMAGE" -f "$REPO_ROOT/docker/Dockerfile.hermes" "$REPO_ROOT" >"$build_log" 2>&1; then
+    rm -f "$build_log"
+    return 0
+  fi
+
+  if grep -qiE 'toomanyrequests|Too Many Requests|pull rate limit' "$build_log"; then
+    log_warn "Docker Hub anonymous pull rate limit hit during fallback build"
+    log_warn "current fallback base image: $fallback_base_image"
+    log_warn "use a non-Docker-Hub mirror in $ENVFILE, for example:"
+    log_warn "  HERMES_FALLBACK_BASE_IMAGE=$DEFAULT_FALLBACK_BASE_IMAGE"
+  else
+    log_warn "fallback docker build failed; recent Docker output:"
+  fi
+
+  tail -n 40 "$build_log" >&2 || true
+  rm -f "$build_log"
+  die "could not build $LOCAL_IMAGE"
+}
+
 ensure_image() {
   if docker_image_present "$DEFAULT_IMAGE"; then
     log_skip "image $DEFAULT_IMAGE already present"
@@ -123,8 +148,10 @@ ensure_image() {
   fi
 
   log_warn "pull failed for $DEFAULT_IMAGE — falling back to local build"
-  log_act "docker build -t $LOCAL_IMAGE -f docker/Dockerfile.hermes ."
-  docker build -t "$LOCAL_IMAGE" -f "$REPO_ROOT/docker/Dockerfile.hermes" "$REPO_ROOT" >/dev/null
+  local fallback_base_image
+  fallback_base_image="${HERMES_FALLBACK_BASE_IMAGE:-$(read_env_value "$ENVFILE" HERMES_FALLBACK_BASE_IMAGE 2>/dev/null || printf '%s' "$DEFAULT_FALLBACK_BASE_IMAGE")}"
+  log_act "docker build --build-arg BASE_IMAGE=$fallback_base_image -t $LOCAL_IMAGE -f docker/Dockerfile.hermes ."
+  run_fallback_build "$fallback_base_image"
   log_ok "built $LOCAL_IMAGE"
   HERMES_IMAGE="$LOCAL_IMAGE"
   set_env_value "$ENVFILE" HERMES_IMAGE "$HERMES_IMAGE" >/dev/null || true

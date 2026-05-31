@@ -5,7 +5,7 @@
 ## Before running setup-server.sh
 
 ### Provider and image
-- Any Debian 12 or Ubuntu 22.04 VPS (Hetzner, DigitalOcean, Linode, Vultr, Scaleway — all fine).
+- Any Debian 12 or Ubuntu 26.04 LTS VPS (Hetzner, DigitalOcean, Linode, Vultr, Scaleway — all fine). Ubuntu 22.04+ remains supported by the scripts.
 - Minimum: 1 vCPU, 2 GB RAM, 20 GB disk. Hermes itself is small; Playwright MCP image is ~1 GB so plan accordingly.
 - Region: pick the one closest to your LLM provider's API endpoint to minimise latency.
 
