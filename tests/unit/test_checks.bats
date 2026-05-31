@@ -126,3 +126,24 @@ EOF
   [ "$status" -eq 1 ]
   rm -f "$tmp"
 }
+
+@test "read_env_value exits 1 when key has an empty value" {
+  local tmp; tmp=$(mktemp)
+  echo "FOO=" > "$tmp"
+  run read_env_value "$tmp" FOO
+  [ "$status" -eq 1 ]
+  rm -f "$tmp"
+}
+
+@test "read_env_value is not vulnerable to regex injection in the key" {
+  local tmp; tmp=$(mktemp)
+  echo "OTHER=value" > "$tmp"
+  run read_env_value "$tmp" 'FOO|OTHER'
+  [ "$status" -eq 1 ]
+  rm -f "$tmp"
+}
+
+@test "is_numeric_csv rejects a leading comma" {
+  run is_numeric_csv ",123"
+  [ "$status" -eq 1 ]
+}

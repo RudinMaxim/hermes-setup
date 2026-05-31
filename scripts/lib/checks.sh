@@ -76,7 +76,7 @@ is_numeric_csv() {
 }
 
 # read_env_value FILE KEY -> prints the value (comments/whitespace stripped),
-# exit 1 if the key is absent. Complements env_var_set_in_file (boolean only).
+# exit 1 if the key is absent or empty. Complements env_var_set_in_file (boolean only).
 # awk with a literal key match — no regex injection from $key.
 read_env_value() {
   local file="$1" key="$2"
@@ -91,7 +91,8 @@ read_env_value() {
       if (lhs != k) next
       rhs = substr($0, eq+1)
       sub(/^[[:space:]]+/, "", rhs); sub(/[[:space:]]+$/, "", rhs)
-      print rhs; found = 1; exit
+      if (rhs != "") { print rhs; found = 1 }
+      exit
     }
     END { exit (found ? 0 : 1) }
   ' "$file"
