@@ -18,8 +18,8 @@ STATE=/tmp/.gw-stub-cmd
 case "$*" in
   "inspect -f "*"State.Status"*)  echo running ;;
   "inspect -f "*"Config.Cmd"*)    [[ -f "$STATE" ]] && cat "$STATE" || echo hermes ;;
-  *"docker-compose.gateway.yml up -d"*) echo "hermes gateway run" >"$STATE"; echo up ;;
-  *"up -d --force-recreate"*)     echo "hermes" >"$STATE"; echo recreated ;;
+  *"docker-compose.gateway.yml up -d"*) echo "hermes gateway run" >"$STATE"; printf '%s\n' "${HERMES_IMAGE:-}" > /tmp/.gw-image; echo up ;;
+  *"up -d --force-recreate"*)     echo "hermes" >"$STATE"; printf '%s\n' "${HERMES_IMAGE:-}" > /tmp/.gw-image; echo recreated ;;
   "exec hermes hermes gateway status"*) exit 0 ;;
   *) echo "stub: $*" ;;
 esac
@@ -43,7 +43,7 @@ CURL
 }
 
 teardown() {
-  rm -rf "$STUB" "$STATE"
+  rm -rf "$STUB" "$STATE" /tmp/.gw-image
   rm -f "$REPO_ROOT/config/gateways.toml"
 }
 
@@ -82,6 +82,23 @@ enable_telegram() {
 @test "setup-gateway.sh is idempotent when telegram stays enabled" {
   enable_telegram
   assert_idempotent su hermes -c "PATH=$STUB:\$PATH HERMES_NONINTERACTIVE=1 bash '$SCRIPTS/setup-gateway.sh'"
+}
+
+@test "setup-gateway.sh does not call Telegram when gateway is already active" {
+  enable_telegram
+  echo "hermes gateway run" > "$STATE"
+  run su hermes -c "PATH=$STUB:\$PATH HERMES_NONINTERACTIVE=1 GETME_RESPONSE='{\"ok\":false}' bash '$SCRIPTS/setup-gateway.sh'"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"telegram gateway already running"* ]]
+}
+
+@test "setup-gateway.sh reuses persisted HERMES_IMAGE when recreating the container" {
+  enable_telegram
+  printf 'HERMES_IMAGE=hermes-agent:local\n' >> "$REPO_ROOT/config/.env"
+  chown hermes "$REPO_ROOT/config/.env"
+  run su hermes -c "PATH=$STUB:\$PATH HERMES_NONINTERACTIVE=1 bash '$SCRIPTS/setup-gateway.sh'"
+  [ "$status" -eq 0 ]
+  [ "$(cat /tmp/.gw-image)" = "hermes-agent:local" ]
 }
 
 @test "setup-gateway.sh rolls back to idle when telegram is disabled" {

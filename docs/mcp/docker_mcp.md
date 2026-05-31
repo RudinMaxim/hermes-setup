@@ -17,7 +17,18 @@ This MCP mounts `/var/run/docker.sock` into the hermes container. Anyone who can
 
 ## What the script does
 - Installs `@modelcontextprotocol/server-docker` inside the hermes container.
-- Registers it with Hermes; the daemon socket is mounted via the compose volume (added by the script if needed).
+- Verifies that `/var/run/docker.sock` is already mounted into the Hermes
+  container before registering the MCP.
+- Registers it with Hermes when the socket is present.
+
+The script does not edit `config/docker-compose.yml` automatically because that
+requires a deliberate container recreate. If setup reports that the socket is
+missing, add this volume under `services.hermes.volumes` and recreate the
+container:
+
+```yaml
+- /var/run/docker.sock:/var/run/docker.sock
+```
 
 ## Verify
 ```bash

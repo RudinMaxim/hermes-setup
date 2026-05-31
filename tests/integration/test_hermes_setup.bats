@@ -58,6 +58,80 @@ STUB
   rm -rf /tmp/bin-stub
 }
 
+@test "setup-hermes.sh fails early when Docker is not accessible" {
+  cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
+  sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"
+
+  mkdir -p /tmp/bin-stub
+  cat >/tmp/bin-stub/docker <<'STUB'
+#!/usr/bin/env bash
+case "$1" in
+  info) echo "permission denied" >&2; exit 1 ;;
+  *) echo "unexpected docker call: $*" >&2; exit 1 ;;
+esac
+STUB
+  chmod +x /tmp/bin-stub/docker
+
+  run su hermes -c "PATH=/tmp/bin-stub:$PATH bash '$SCRIPTS/setup-hermes.sh'"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"cannot access Docker daemon"* ]]
+
+  rm -rf /tmp/bin-stub
+}
+
+@test "setup-hermes.sh persists the selected local fallback image" {
+  cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
+  sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"
+
+  mkdir -p /tmp/bin-stub
+  cat >/tmp/bin-stub/docker <<'STUB'
+#!/usr/bin/env bash
+case "$1" in
+  info) exit 0 ;;
+  image) exit 1 ;;
+  pull) exit 1 ;;
+  build) exit 0 ;;
+  *) echo "stub: $*" ;;
+esac
+STUB
+  chmod +x /tmp/bin-stub/docker
+
+  run su hermes -c "PATH=/tmp/bin-stub:$PATH HERMES_NO_COMPOSE=1 bash '$SCRIPTS/setup-hermes.sh'"
+  [ "$status" -eq 0 ]
+  grep -qx 'HERMES_IMAGE=hermes-agent:local' "$REPO_ROOT/config/.env"
+
+  rm -rf /tmp/bin-stub
+}
+
+@test "setup-hermes.sh recreates a running container when the projects mount is missing" {
+  cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
+  sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"
+
+  mkdir -p /tmp/bin-stub
+  cat >/tmp/bin-stub/docker <<'STUB'
+#!/usr/bin/env bash
+case "$*" in
+  "info") exit 0 ;;
+  "image inspect nousresearch/hermes-agent:latest") exit 0 ;;
+  "volume inspect hermes_data") exit 0 ;;
+  "network inspect hermes_net") exit 0 ;;
+  "inspect -f {{.State.Status}} hermes") echo running ;;
+  "inspect -f "*"Mounts"*" hermes") echo "/home/hermes/.hermes" ;;
+  "compose "*"up -d --force-recreate") touch /tmp/.hermes-recreated; echo recreated ;;
+  *) echo "stub: $*" ;;
+esac
+STUB
+  chmod +x /tmp/bin-stub/docker
+  rm -f /tmp/.hermes-recreated
+
+  run su hermes -c "PATH=/tmp/bin-stub:$PATH bash '$SCRIPTS/setup-hermes.sh'"
+  [ "$status" -eq 0 ]
+  [ -f /tmp/.hermes-recreated ]
+  [[ "$output" == *"recreating container 'hermes' to apply compose mounts"* ]]
+
+  rm -rf /tmp/bin-stub /tmp/.hermes-recreated
+}
+
 @test "setup-hermes.sh is idempotent across full run" {
   cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
   sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"
@@ -74,6 +148,7 @@ case "$*" in
   "network create "*) echo created ;;
   "compose "*"up -d") echo "up"; touch /tmp/.docker-stub-container ;;
   "ps -a --format "*) [[ -f /tmp/.docker-stub-container ]] && echo hermes ;;
+  "inspect -f "*"Mounts"*" hermes") echo "/home/hermes/projects" ;;
   "inspect -f "*) echo running ;;
   "exec "*) echo "hermes 0.1.0" ;;
   *) echo "stub: $*" ;;

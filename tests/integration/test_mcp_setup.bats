@@ -97,6 +97,70 @@ STUB
   rm -rf /tmp/bin-stub /tmp/.removed
 }
 
+@test "setup-mcp.sh does not remove MCPs it does not manage" {
+  mkdir -p /tmp/bin-stub
+  cat >/tmp/bin-stub/docker <<'STUB'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "ps -a") echo hermes ;;
+  "inspect -f") echo running ;;
+  "exec hermes")
+    shift 2
+    case "$*" in
+      "hermes mcp list --quiet") printf 'github\nmanual_server\n' ;;
+      "hermes mcp remove github") echo github >> /tmp/.removed ;;
+      "hermes mcp remove manual_server") echo manual_server >> /tmp/.removed ;;
+      *) echo "" ;;
+    esac ;;
+  *) echo "stub: $*" ;;
+esac
+STUB
+  chmod +x /tmp/bin-stub/docker
+  rm -f /tmp/.removed
+
+  run su hermes -c "PATH=/tmp/bin-stub:$PATH bash '$SCRIPTS/setup-mcp.sh'"
+  [ "$status" -eq 0 ]
+  [ -f /tmp/.removed ]
+  grep -qx github /tmp/.removed
+  ! grep -qx manual_server /tmp/.removed
+
+  rm -rf /tmp/bin-stub /tmp/.removed
+}
+
+@test "setup-mcp.sh registers filesystem MCP with the configured mount path" {
+  sed -i '/^\[filesystem\]/,/^$/ s|^enabled = false$|enabled = true|' "$REPO_ROOT/config/mcp.toml"
+  sed -i '/^\[filesystem\]/,/^$/ s|^mount = .*$|mount = "/home/hermes/projects"|' "$REPO_ROOT/config/mcp.toml"
+
+  mkdir -p /tmp/bin-stub
+  cat >/tmp/bin-stub/docker <<'STUB'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "ps -a") echo hermes ;;
+  "inspect -f") echo running ;;
+  "exec hermes")
+    shift 2
+    case "$*" in
+      "bash -c npm list -g --depth=0 2>/dev/null | grep"*) exit 1 ;;
+      "npm install -g "*) echo installed ;;
+      "hermes mcp list --quiet") echo "" ;;
+      "hermes mcp add"*) printf '%s\n' "$*" > /tmp/.mcp-add ;;
+      "hermes mcp test filesystem") exit 0 ;;
+      *) echo "exec-stub: $*" ;;
+    esac ;;
+  *) echo "stub: $*" ;;
+esac
+STUB
+  chmod +x /tmp/bin-stub/docker
+  rm -f /tmp/.mcp-add
+
+  run su hermes -c "PATH=/tmp/bin-stub:$PATH bash '$SCRIPTS/setup-mcp.sh'"
+  [ "$status" -eq 0 ]
+  grep -q -- '--command npx' /tmp/.mcp-add
+  grep -q -- '--args -y @modelcontextprotocol/server-filesystem /home/hermes/projects' /tmp/.mcp-add
+
+  rm -rf /tmp/bin-stub /tmp/.mcp-add
+}
+
 @test "setup-mcp.sh refuses docker_mcp without acknowledge_socket_risk" {
   sed -i '/^\[docker_mcp\]/,/^$/ s|^enabled = false$|enabled = true|' "$REPO_ROOT/config/mcp.toml"
 

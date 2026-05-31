@@ -3,12 +3,14 @@
 Read/write access to a host directory mounted into the Hermes container.
 
 ## What you need to do by hand
-1. Decide which host directory to expose (default: `/home/hermes/projects`).
+1. Decide which host directory to expose on the host (default:
+   `/home/hermes/projects`, controlled by `HERMES_PROJECTS_DIR` in
+   `config/.env`).
 2. Make sure it exists:
    ```bash
    mkdir -p ~/projects
    ```
-3. In `config/mcp.toml`, set:
+3. In `config/mcp.toml`, keep the container mount path:
    ```toml
    [filesystem]
    enabled = true
@@ -18,7 +20,9 @@ Read/write access to a host directory mounted into the Hermes container.
 
 ## What the script does
 - Installs `@modelcontextprotocol/server-filesystem` inside the hermes container.
-- Registers it with Hermes pointing at the `mount` path.
+- Mounts `HERMES_PROJECTS_DIR` from the host into the Hermes container at
+  `/home/hermes/projects`.
+- Registers it with Hermes pointing at the container-side `mount` path.
 
 ## Verify
 ```bash

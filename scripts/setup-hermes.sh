@@ -38,8 +38,14 @@ require_non_root() {
 }
 
 require_docker_group() {
-  if ! user_in_group "$(whoami)" docker 2>/dev/null && ! has_command docker; then
-    die "current user not in 'docker' group and 'docker' not in PATH — log out and back in after running setup-server.sh, or run: newgrp docker"
+  if ! has_command docker; then
+    die "docker is not in PATH — run setup-server.sh first"
+  fi
+  if ! docker info >/dev/null 2>&1; then
+    if ! user_in_group "$(whoami)" docker 2>/dev/null; then
+      die "cannot access Docker daemon — current user is not in the 'docker' group; log out and back in after running setup-server.sh, or run: newgrp docker"
+    fi
+    die "cannot access Docker daemon — if setup-server.sh just added the docker group, log out and back in or run: newgrp docker"
   fi
 }
 
@@ -97,12 +103,14 @@ ensure_image() {
   if docker_image_present "$DEFAULT_IMAGE"; then
     log_skip "image $DEFAULT_IMAGE already present"
     HERMES_IMAGE="$DEFAULT_IMAGE"
+    set_env_value "$ENVFILE" HERMES_IMAGE "$HERMES_IMAGE" >/dev/null || true
     return 0
   fi
 
   if docker_image_present "$LOCAL_IMAGE"; then
     log_skip "image $LOCAL_IMAGE already present (local fallback)"
     HERMES_IMAGE="$LOCAL_IMAGE"
+    set_env_value "$ENVFILE" HERMES_IMAGE "$HERMES_IMAGE" >/dev/null || true
     return 0
   fi
 
@@ -110,6 +118,7 @@ ensure_image() {
   if docker pull "$DEFAULT_IMAGE" >/dev/null 2>&1; then
     log_ok "pulled $DEFAULT_IMAGE"
     HERMES_IMAGE="$DEFAULT_IMAGE"
+    set_env_value "$ENVFILE" HERMES_IMAGE "$HERMES_IMAGE" >/dev/null || true
     return 0
   fi
 
@@ -118,6 +127,26 @@ ensure_image() {
   docker build -t "$LOCAL_IMAGE" -f "$REPO_ROOT/docker/Dockerfile.hermes" "$REPO_ROOT" >/dev/null
   log_ok "built $LOCAL_IMAGE"
   HERMES_IMAGE="$LOCAL_IMAGE"
+  set_env_value "$ENVFILE" HERMES_IMAGE "$HERMES_IMAGE" >/dev/null || true
+}
+
+load_compose_env() {
+  HERMES_IMAGE=$(read_env_value "$ENVFILE" HERMES_IMAGE 2>/dev/null || printf '%s' "$DEFAULT_IMAGE")
+  export HERMES_IMAGE
+  HERMES_PROJECTS_DIR=$(read_env_value "$ENVFILE" HERMES_PROJECTS_DIR 2>/dev/null || printf '%s' "/home/hermes/projects")
+  export HERMES_PROJECTS_DIR
+}
+
+ensure_projects_dir() {
+  local dir
+  dir=$(read_env_value "$ENVFILE" HERMES_PROJECTS_DIR 2>/dev/null || printf '%s' "/home/hermes/projects")
+  if [[ -d "$dir" ]]; then
+    log_skip "projects directory $dir already exists"
+    return 0
+  fi
+  log_act "creating projects directory $dir"
+  mkdir -p "$dir" || die "cannot create projects directory $dir"
+  log_ok "projects directory $dir created"
 }
 
 ensure_volume() {
@@ -140,17 +169,35 @@ ensure_network() {
   fi
 }
 
+container_has_mount() {
+  local container="$1" dest="$2"
+  docker inspect -f '{{range .Mounts}}{{.Destination}}{{"\n"}}{{end}}' "$container" 2>/dev/null \
+    | grep -qxF -- "$dest"
+}
+
 ensure_compose_up() {
   if docker_container_running hermes; then
-    log_skip "container 'hermes' already running"
+    if container_has_mount hermes /home/hermes/projects; then
+      log_skip "container 'hermes' already running"
+    else
+      log_act "recreating container 'hermes' to apply compose mounts"
+      HERMES_IMAGE="$HERMES_IMAGE" docker compose -f "$CONFIG_DIR/docker-compose.yml" up -d --force-recreate >/dev/null
+      log_ok "container 'hermes' recreated"
+    fi
     return 0
   fi
   if docker_container_exists hermes; then
     # Container exists but is stopped/exited. `compose up` would fail with
     # 'container name already in use' — start it explicitly instead.
-    log_act "starting existing 'hermes' container"
-    docker start hermes >/dev/null
-    log_ok "container 'hermes' started"
+    if container_has_mount hermes /home/hermes/projects; then
+      log_act "starting existing 'hermes' container"
+      docker start hermes >/dev/null
+      log_ok "container 'hermes' started"
+    else
+      log_act "recreating existing 'hermes' container to apply compose mounts"
+      HERMES_IMAGE="$HERMES_IMAGE" docker compose -f "$CONFIG_DIR/docker-compose.yml" up -d --force-recreate >/dev/null
+      log_ok "container 'hermes' recreated"
+    fi
     return 0
   fi
   log_act "docker compose up -d hermes"
@@ -217,6 +264,8 @@ main() {
     log_ok "HERMES_NO_COMPOSE set: stopping before compose up"
     return 0
   fi
+  load_compose_env
+  ensure_projects_dir
   ensure_volume
   ensure_network
   ensure_compose_up

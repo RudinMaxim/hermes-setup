@@ -52,7 +52,7 @@ disabled_mcps_to_remove() {
   registered=$(docker exec hermes hermes mcp list --quiet 2>/dev/null | awk 'NF{print $1}') || return 0
   while IFS= read -r s; do
     [[ -z "$s" ]] && continue
-    if ! toml_get_bool "$TOML" "$s" enabled; then
+    if toml_sections "$TOML" | grep -qxF -- "$s" && ! toml_get_bool "$TOML" "$s" enabled; then
       printf '%s\n' "$s"
     fi
   done <<<"$registered"
@@ -78,7 +78,7 @@ check_required_env() {
 mcp_registered_in_hermes() {
   docker exec hermes hermes mcp list --quiet 2>/dev/null \
     | awk 'NF{print $1}' \
-    | grep -qx "$1"
+    | grep -qxF -- "$1"
 }
 
 npm_pkg_installed() {
@@ -113,13 +113,19 @@ deploy_stdio_mcp() {
     log_skip "mcp.$mcp: already registered in hermes"
   else
     log_act "registering mcp '$mcp'"
-    local env_args=() req
+    local env_args=() cmd_args=() req
     while IFS= read -r req; do
       [[ -z "$req" ]] && continue
       env_args+=(--env "$req")
     done < <(toml_get_array "$TOML" "$mcp" requires)
+    cmd_args=(-y "$pkg")
+    if [[ "$mcp" == "filesystem" ]]; then
+      local mount
+      mount=$(toml_get "$TOML" "$mcp" mount) || die "mcp.$mcp: missing 'mount'"
+      cmd_args+=("$mount")
+    fi
     docker exec hermes hermes mcp add "$mcp" \
-      --transport stdio --command "$pkg" "${env_args[@]}" >/dev/null
+      --command npx "${env_args[@]}" --args "${cmd_args[@]}" >/dev/null
     log_ok "registered mcp '$mcp'"
   fi
 }
@@ -143,7 +149,7 @@ deploy_http_mcp() {
   else
     log_act "registering mcp '$mcp' (http)"
     docker exec hermes hermes mcp add "$mcp" \
-      --transport http --url "http://$service:$port" >/dev/null
+      --url "http://$service:$port" >/dev/null
     log_ok "registered mcp '$mcp'"
   fi
 }

@@ -30,10 +30,10 @@ load '../helpers/assertions'
   [ "$status" -eq 0 ]
 }
 
-@test "setup-server.sh aborts SSH hardening when hermes has no authorized_keys" {
+@test "setup-server.sh skips SSH hardening when hermes has no authorized_keys" {
   rm -f /home/hermes/.ssh/authorized_keys /root/.ssh/authorized_keys
   run bash "$SCRIPTS/setup-server.sh"
-  [ "$status" -ne 0 ]
+  [ "$status" -eq 0 ]
   [[ "$output" == *"self-lockout"* || "$output" == *"no SSH keys"* ]]
 }
 

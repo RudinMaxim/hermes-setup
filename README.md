@@ -1,84 +1,104 @@
 # hermes-setup
 
-Idempotent bash installer for [Hermes Agent](https://hermes-agent.nousresearch.com) on a Linux VPS, running in Docker, with a curated developer-stack of MCP servers.
+Идемпотентный bash-установщик [Hermes Agent](https://hermes-agent.nousresearch.com) для Linux VPS. Hermes запускается в Docker, а MCP-серверы и Telegram gateway включаются через конфиги.
 
-## What it gives you
+## Что делает репозиторий
 
-- A hardened Debian/Ubuntu VPS: dedicated `hermes` user, SSH key-only login, UFW, fail2ban, unattended-upgrades.
-- Hermes Agent running in a Docker container (`docker exec -it hermes hermes chat`).
-- An opt-in set of MCP servers (Filesystem, GitHub, Context7, Memory, Playwright, Postgres, Docker) toggled via `config/mcp.toml`.
-- Every script is idempotent — re-running is safe and reports only `[SKIP]` lines.
+- Подготавливает Debian/Ubuntu VPS: отдельный пользователь `hermes`, вход по SSH-ключу, UFW, fail2ban, unattended-upgrades.
+- Запускает Hermes Agent в Docker-контейнере: `docker exec -it hermes hermes chat`.
+- Позволяет включать MCP-серверы через `config/mcp.toml`: Filesystem, GitHub, Context7, Memory, Playwright, Postgres, Docker.
+- Монтирует директорию для Filesystem MCP через `HERMES_PROJECTS_DIR` (по умолчанию `/home/hermes/projects`) в контейнер как `/home/hermes/projects`.
+- Поддерживает Telegram gateway для повседневного доступа, если в `config/gateways.toml` включить `[telegram] enabled = true`.
+- Скрипты можно запускать повторно: они проверяют текущее состояние и пропускают уже выполненные шаги.
 
-## Quick start (on a fresh VPS)
+## Быстрый старт на новом VPS
 
 ```bash
-# 1. Provision a Debian 12 or Ubuntu 22.04 VPS, add your SSH key, log in as root.
+# 1. Создай Debian 12 или Ubuntu 22.04 VPS, добавь SSH-ключ и зайди под root.
 ssh root@<vps-ip>
 
-# 2. Clone and run the server preparation (creates 'hermes' user, installs
-#    Docker, copies the repo to /home/hermes/hermes-setup, hardens SSH, enables UFW).
+# 2. Склонируй репозиторий и подготовь сервер.
+#    Скрипт создаст пользователя hermes, поставит Docker, скопирует репозиторий
+#    в /home/hermes/hermes-setup, включит SSH hardening и firewall.
 git clone https://github.com/RudinMaxim/hermes-setup.git
 cd hermes-setup
 sudo ./scripts/setup-server.sh
 
-# If root has no SSH key (logged in with password), provide one for hermes:
+# Если у root нет SSH-ключа, передай ключ явно:
 #   HERMES_SSH_KEY="ssh-ed25519 AAAA... you@host" sudo ./scripts/setup-server.sh
 
-# 3. Verify the new SSH login works from a SECOND terminal before closing root:
+# 3. Проверь вход под hermes во ВТОРОМ терминале, не закрывая root-сессию:
 #   ssh hermes@<vps-ip>
 
-# 4. Switch to hermes, fill the LLM key, launch Hermes.
+# 4. Переключись на hermes, заполни LLM-ключ и запусти Hermes.
 su - hermes
 cd ~/hermes-setup
-nano config/.env          # set OPENAI_API_KEY=... or ANTHROPIC_API_KEY=...
+nano config/.env          # укажи OPENAI_API_KEY=... или ANTHROPIC_API_KEY=...
+# Опционально: поменяй HERMES_PROJECTS_DIR, если Filesystem MCP должен открыть другую host-директорию.
 ./scripts/setup-hermes.sh
 
-# 5. (Optional) Enable MCP servers:
-nano config/mcp.toml      # toggle enabled = true for what you want
+# 5. Опционально: включи MCP-серверы.
+nano config/mcp.toml      # поставь enabled = true для нужных MCP
 ./scripts/setup-mcp.sh
 
-# 6. (Optional) Enable a Telegram gateway for daily use:
-nano config/gateways.toml # set [telegram] enabled = true
+# 6. Опционально: включи Telegram gateway.
+nano config/gateways.toml # поставь [telegram] enabled = true
 ./scripts/setup-gateway.sh
 ```
 
-`setup-hermes.sh` copies `config/.env.example` → `config/.env` automatically on first run if you skip step 4's `nano`; it will then abort with a clear message asking you to fill the key.
+`setup-hermes.sh` сам создаёт `config/.env` из `config/.env.example`, если файла ещё нет. Если LLM-ключ не заполнен, скрипт остановится с понятным сообщением.
 
-### Quick start (interactive)
+Если pull образа `nousresearch/hermes-agent:latest` не удался, `setup-hermes.sh` соберёт локальный образ `hermes-agent:local` из `docker/Dockerfile.hermes` и запишет выбранный `HERMES_IMAGE` в `config/.env`. Последующие пересоздания контейнера, включая Telegram gateway, будут использовать тот же образ.
 
-Instead of steps 4–6, on the `hermes` user you can run the orchestrator:
+## Интерактивный запуск
+
+Вместо шагов 4-6 можно запустить оркестратор под пользователем `hermes`:
 
 ```bash
 cd ~/hermes-setup && ./setup.sh
 ```
 
-In a terminal it prompts for your LLM API key (and, if you opt in, a Telegram bot
-token), brings Hermes up, then offers the optional gateway / MCP steps. For
-scripted, non-interactive use add `--non-interactive` and pre-fill `config/.env`.
+В интерактивном терминале он спросит LLM-ключ, запустит Hermes, а затем предложит настроить Telegram gateway и MCP. Для scripted-запуска используй `--non-interactive` и заранее заполни `config/.env`.
 
-## Documentation
+## MCP
 
-- [`docs/01-server-setup.md`](docs/01-server-setup.md) — manual steps that aren't automated (provisioning, DNS, backups).
-- [`docs/02-hermes-setup.md`](docs/02-hermes-setup.md) — how to fill in `.env`, troubleshoot, chat with the agent.
-- [`docs/mcp/`](docs/mcp/) — one file per MCP server: where to get the token, what the script does for you.
-- [`docs/gateways/telegram.md`](docs/gateways/telegram.md) — set up the Telegram gateway (BotFather, user IDs, privacy mode).
-- [`docs/superpowers/specs/2026-05-30-hermes-setup-design.md`](docs/superpowers/specs/2026-05-30-hermes-setup-design.md) — full design rationale.
+- `setup-mcp.sh` управляет только MCP, которые перечислены в `config/mcp.toml`. MCP-серверы, добавленные в Hermes вручную, не удаляются.
+- Для Filesystem MCP оставь `mount = "/home/hermes/projects"` в `config/mcp.toml`. Host-директория настраивается через `HERMES_PROJECTS_DIR` в `config/.env`.
+- Docker MCP опасен: mount `/var/run/docker.sock` даёт root-equivalent доступ к хосту. Скрипт требует `acknowledge_socket_risk = true` и проверяет, что socket уже смонтирован в контейнер. Подробности: [`docs/mcp/docker_mcp.md`](docs/mcp/docker_mcp.md).
 
-## Testing
+## Частые команды
 
 ```bash
-make test-unit         # bats unit tests on host (fast)
-make test-integration  # full scripts in systemd-enabled Docker sandbox
-make test              # both
+docker exec -it hermes hermes chat          # открыть CLI Hermes
+docker logs --tail=100 hermes               # посмотреть последние логи контейнера
+./scripts/setup-hermes.sh                   # синхронизировать config/image/container
+./scripts/setup-mcp.sh                      # синхронизировать включённые MCP
+./scripts/setup-gateway.sh                  # включить или выключить Telegram gateway
 ```
 
-## Layout
+## Документация
 
+- [`docs/01-server-setup.md`](docs/01-server-setup.md) — ручные шаги вокруг подготовки VPS: provisioning, DNS, backups.
+- [`docs/02-hermes-setup.md`](docs/02-hermes-setup.md) — как заполнить `.env`, запустить Hermes и открыть чат.
+- [`docs/mcp/`](docs/mcp/) — отдельный файл на каждый MCP-сервер.
+- [`docs/gateways/telegram.md`](docs/gateways/telegram.md) — настройка Telegram bot, user ID и privacy mode.
+- [`docs/superpowers/specs/2026-05-30-hermes-setup-design.md`](docs/superpowers/specs/2026-05-30-hermes-setup-design.md) — исходный design rationale.
+
+## Тесты
+
+```bash
+make test-unit         # быстрые Bats unit-тесты на host
+make test-integration  # полные integration-тесты в systemd-enabled Docker sandbox
+make test              # оба набора
 ```
-setup.sh   thin hermes-side orchestrator (interactive)
+
+## Структура
+
+```text
+setup.sh   тонкий оркестратор для hermes-side шагов
 scripts/   setup-server.sh, setup-hermes.sh, setup-mcp.sh, setup-gateway.sh + lib/
 config/    .env.example, mcp.toml.example, gateways.toml.example, docker-compose*.yml
-docker/    Dockerfile.hermes (fallback build)
-docs/      manual instructions (incl. gateways/)
-tests/     bats unit + integration + sandbox Dockerfile
+docker/    Dockerfile.hermes для fallback-сборки
+docs/      ручные инструкции, MCP и gateway docs
+tests/     Bats unit/integration тесты и sandbox Dockerfile
 ```

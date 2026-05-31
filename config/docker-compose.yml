@@ -9,6 +9,7 @@ services:
     env_file: ./.env
     volumes:
       - hermes_data:/home/hermes/.hermes
+      - ${HERMES_PROJECTS_DIR:-/home/hermes/projects}:/home/hermes/projects
     networks: [hermes_net]
     healthcheck:
       test: ["CMD-SHELL", "hermes --version >/dev/null 2>&1 || exit 1"]

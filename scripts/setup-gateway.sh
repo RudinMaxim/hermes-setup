@@ -39,6 +39,13 @@ require_hermes_running() {
     || die "hermes container is not running — run scripts/setup-hermes.sh first"
 }
 
+load_compose_env() {
+  HERMES_IMAGE=$(read_env_value "$ENVFILE" HERMES_IMAGE 2>/dev/null || printf '%s' "nousresearch/hermes-agent:latest")
+  export HERMES_IMAGE
+  HERMES_PROJECTS_DIR=$(read_env_value "$ENVFILE" HERMES_PROJECTS_DIR 2>/dev/null || printf '%s' "/home/hermes/projects")
+  export HERMES_PROJECTS_DIR
+}
+
 gateway_enabled() {
   toml_get_bool "$GW_TOML" "$1" enabled
 }
@@ -103,13 +110,14 @@ wait_for_gateway() {
 }
 
 ensure_telegram() {
-  maybe_prompt_telegram
-  validate_telegram
   if telegram_gateway_active; then
     log_skip "telegram gateway already running (PID1 = hermes gateway run)"
     return 0
   fi
+  maybe_prompt_telegram
+  validate_telegram
   log_act "starting telegram gateway (recreating container with gateway command)"
+  load_compose_env
   docker compose -f "$CONFIG_DIR/docker-compose.yml" \
                  -f "$CONFIG_DIR/docker-compose.gateway.yml" up -d >/dev/null
   wait_for_gateway
@@ -122,6 +130,7 @@ ensure_telegram_off() {
     return 0
   fi
   log_act "disabling telegram gateway (recreating container without gateway command)"
+  load_compose_env
   docker compose -f "$CONFIG_DIR/docker-compose.yml" up -d --force-recreate >/dev/null
   log_ok "telegram gateway stopped; container back to idle/CLI mode"
 }

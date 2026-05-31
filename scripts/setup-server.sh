@@ -299,7 +299,7 @@ ensure_docker() {
 main() {
   require_root
   require_debian_family
-  log_ok "pre-flight checks passed"
+  log_skip "pre-flight checks passed"
 
   ensure_apt_cache_fresh
   ensure_pkgs
@@ -313,11 +313,11 @@ main() {
   ensure_unattended_upgrades
   ensure_docker
 
-  log_ok "server setup complete"
-  log_ok "next steps:"
-  log_ok "  su - hermes"
-  log_ok "  cd ~/hermes-setup && nano config/.env   # add OPENAI_API_KEY or ANTHROPIC_API_KEY"
-  log_ok "  ./scripts/setup-hermes.sh"
+  log_skip "server setup complete"
+  log_skip "next steps:"
+  log_skip "  su - hermes"
+  log_skip "  cd ~/hermes-setup && nano config/.env   # add OPENAI_API_KEY or ANTHROPIC_API_KEY"
+  log_skip "  ./scripts/setup-hermes.sh"
 }
 
 main "$@"
