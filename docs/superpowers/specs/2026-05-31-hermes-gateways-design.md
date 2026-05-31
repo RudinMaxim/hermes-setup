@@ -13,6 +13,13 @@
 Фаза 2 (deferred, спроектирована но НЕ реализуется сейчас) — **WebUI** через
 `hermes dashboard` + Caddy (опциональный домен + Let's Encrypt HTTPS).
 
+Параллельно вводится слой **интерактивной инициализации**: при запуске в TTY
+скрипты сами спрашивают недостающие секреты (LLM-ключ, Telegram-токен) и пишут
+их в `.env`; тонкий `setup.sh` оркеструет hermes-сторону (hermes → gateway →
+mcp). Неинтерактивный путь сохраняется без изменений (как сейчас — `die` с
+инструкцией), идемпотентность не нарушается (промпт срабатывает только когда
+значение отсутствует).
+
 ## Не цели
 
 - WebUI в этой итерации (только эскиз в разделе Phase 2).
@@ -141,6 +148,107 @@ ensure_telegram_off() {
 возвращает 0, либо в `docker logs hermes` появляется строка о старте gateway);
 иначе `docker logs --tail=50 hermes` и `die`.
 
+## Интерактивная инициализация
+
+Цель — не заставлять пользователя руками править `.env` (это шло вразрез с
+«автоматизируй инициализацию»). Форма: **промпты в самих скриптах + тонкий
+`setup.sh`** (не монолитный wizard, чтобы не дублировать cross-user проблему
+root vs hermes и сохранить тестируемость отдельных скриптов).
+
+### Принципы
+
+- **TTY-gating.** Промпт только если `[[ -t 0 && -t 1 ]]` И не задан
+  `HERMES_NONINTERACTIVE=1` (и нет флага `--non-interactive`). Иначе —
+  текущее поведение: `die` с инструкцией. CI/sandbox-тесты идут неинтерактивным
+  путём.
+- **Идемпотентность не ломается.** Промпт срабатывает ТОЛЬКО когда значение
+  отсутствует. Значение уже в `.env` → промпта нет → `[SKIP]`. Второй прогон
+  (и `assert_idempotent`, который всегда неинтерактивен) → только `[SKIP]`.
+- **Секреты не светятся.** Ввод токенов через `read -rs` (без эха). В логах —
+  только маска вида `token saved (N chars)`, никогда само значение. Запись в
+  `.env` с правами `0600` (уже выставляются в `ensure_configs`).
+
+### Новый `lib/prompt.sh`
+
+Чистые/тестируемые примитивы:
+
+```bash
+# set_env_value FILE KEY VALUE — идемпотентный upsert строки KEY=VALUE.
+# Если KEY уже равен VALUE — ничего не пишет (return 1 = "no change"),
+# иначе заменяет существующую строку или дописывает в конец (return 0).
+# awk-based, без regex-инъекции (KEY и VALUE — литералы).
+set_env_value() { ... }
+
+is_interactive() { [[ -t 0 && -t 1 && "${HERMES_NONINTERACTIVE:-}" != 1 ]]; }
+
+prompt_value()  { local p="$1"; local out; read -r  -p "$p: " out; printf '%s' "$out"; }
+prompt_secret() { local p="$1"; local out; read -rs -p "$p: " out; echo >&2; printf '%s' "$out"; }
+confirm()       { local p="$1"; local a; read -r -p "$p [y/N]: " a; [[ "$a" =~ ^[Yy] ]]; }
+```
+
+`set_env_value` юнит-тестируется (новый ключ дописан; существующий заменён;
+идентичное значение → не тронуто; значения со спецсимволами `=`/`&`/`/` целы).
+
+### Изменение в `setup-hermes.sh` → `ensure_llm_key`
+
+Сейчас при отсутствии ключа — `die`. Новое поведение:
+
+```bash
+ensure_llm_key() {
+  if env_var_set_in_file "$ENVFILE" OPENAI_API_KEY \
+     || env_var_set_in_file "$ENVFILE" ANTHROPIC_API_KEY; then
+    log_ok "LLM API key present in .env"; return 0
+  fi
+  if is_interactive; then
+    local provider key var
+    provider=$(prompt_value "LLM provider (openai/anthropic)")
+    case "$provider" in
+      anthropic) var=ANTHROPIC_API_KEY ;;
+      *)         var=OPENAI_API_KEY ;;
+    esac
+    key=$(prompt_secret "$var")
+    [[ -n "$key" ]] || die "empty key"
+    set_env_value "$ENVFILE" "$var" "$key" >/dev/null
+    log_ok "$var saved to .env (${#key} chars)"
+    return 0
+  fi
+  die "no LLM API key configured — set OPENAI_API_KEY or ANTHROPIC_API_KEY in $ENVFILE (see docs/02-hermes-setup.md)"
+}
+```
+
+### Изменение в `setup-gateway.sh` → `validate_telegram`
+
+Перед валидацией: если токен/allowlist отсутствуют и `is_interactive` — спросить
+и записать в `.env`, затем валидировать как обычно. Если неинтерактивно —
+текущий `die`. Промпт для allowlist поясняет, что это числовые user ID через
+запятую (как узнать ID — ссылка на `docs/gateways/telegram.md`).
+
+### Тонкий `setup.sh` (оркестратор hermes-стороны)
+
+Запускается из корня репо пользователем hermes. **Не** включает server-шаг
+(он root и одноразовый) — если запущен от root или сервер не подготовлен,
+печатает `[WARN]` со ссылкой на `setup-server.sh` и продолжает hermes-часть.
+
+```bash
+main() {
+  [[ $EUID -ne 0 ]] || log_warn "setup.sh is the hermes-side orchestrator; run setup-server.sh as root separately"
+  "$SCRIPT_DIR/scripts/setup-hermes.sh" "$@"        # LLM-ключ спросится тут
+  if is_interactive && confirm "Configure a messaging gateway (Telegram) now?"; then
+    "$SCRIPT_DIR/scripts/setup-gateway.sh" "$@"
+  fi
+  if is_interactive && confirm "Sync MCP servers from mcp.toml now?"; then
+    "$SCRIPT_DIR/scripts/setup-mcp.sh" "$@"
+  fi
+  log_ok "setup complete"
+}
+```
+
+Флаг `--non-interactive` (и `HERMES_NONINTERACTIVE=1`) пробрасывается в дочерние
+скрипты; в этом режиме `setup.sh` не задаёт вопросов и просто прогоняет
+hermes-шаг (gateway/mcp — только если их `*.toml` уже сконфигурён `enabled`).
+`setup.sh` — тонкая обёртка: вся идемпотентная логика в дочерних скриптах, сам
+он лишь последовательность + да/нет.
+
 ## Валидация Telegram
 
 ### Чистые функции (юнит-тестируемые)
@@ -222,16 +330,20 @@ recreate без override) → повторный disabled-прогон `[SKIP]`.
 ## Файлы
 
 ```
+setup.sh                              # тонкий оркестратор hermes-стороны
 config/gateways.toml.example          # [telegram] + [webui] заглушка
 config/docker-compose.gateway.yml     # override: command = hermes gateway run
-scripts/setup-gateway.sh              # новый скрипт
+scripts/setup-gateway.sh              # новый скрипт (+интерактивный ввод токена)
 scripts/lib/checks.sh                 # +is_numeric_csv, +read_env_value
 scripts/lib/telegram.sh               # +telegram_getme_username
-scripts/setup-hermes.sh               # init gateways.toml.example -> gateways.toml
+scripts/lib/prompt.sh                 # +set_env_value, is_interactive, prompt_*
+scripts/setup-hermes.sh               # init gateways.toml->; ensure_llm_key интерактивен; --non-interactive
+scripts/setup-mcp.sh                  # принять флаг --non-interactive (no-op для совместимости setup.sh)
 docs/gateways/telegram.md             # ручные шаги (BotFather, privacy, user ID)
-docs/02-hermes-setup.md               # ссылка на gateways
-README.md                             # шаг: опциональные gateways
+docs/02-hermes-setup.md               # ссылка на gateways + интерактивный режим
+README.md                             # шаг: ./setup.sh (интерактив) + опциональные gateways
 tests/unit/test_telegram.bats         # getMe-парсер + is_numeric_csv + read_env_value
+tests/unit/test_prompt.bats           # set_env_value (upsert/no-change/спецсимволы), is_interactive
 tests/integration/test_gateway_setup.bats  # stub docker+curl: up / bad token / rollback / idempotency
 ```
 
@@ -245,6 +357,9 @@ tests/integration/test_gateway_setup.bats  # stub docker+curl: up / bad token / 
   `{"ok":false}`→exit1; мусор→exit1.
 - `is_numeric_csv`: `123,456`→0; `123`→0; `12,ab`→1; ``→1; `12,`→1.
 - `read_env_value`: достаёт значение; игнорит `# comment`; отсутствует→exit1.
+- `set_env_value`: новый ключ дописан; существующий заменён; идентичное значение
+  → файл не изменён (return 1); значения с `=`/`&`/`/` сохранены дословно.
+- `is_interactive`: при `HERMES_NONINTERACTIVE=1` → false (без TTY-зависимости).
 
 ### Integration (sandbox, stub docker + curl)
 - enabled=true + getMe-stub ok:true → контейнер с `gateway run`
@@ -255,7 +370,10 @@ tests/integration/test_gateway_setup.bats  # stub docker+curl: up / bad token / 
 - rollback: up → enabled=false → `[ACT] disabling` → Cmd без `gateway run`;
   третий disabled-прогон → `[SKIP]`.
 
-curl стабится через PATH-override (как docker в существующих тестах).
+curl стабится через PATH-override (как docker в существующих тестах). Все
+integration-прогоны идут с `HERMES_NONINTERACTIVE=1` (без TTY в sandbox), поэтому
+ветка `die`-без-ключа покрывается: `setup-hermes.sh` без LLM-ключа и без TTY →
+`die`, exit≠0 (подтверждает, что промпт не блокирует неинтерактивный путь).
 
 ### Признанные ограничения
 - Реальный приём сообщений ботом не тестируется (нужен живой Telegram) —
