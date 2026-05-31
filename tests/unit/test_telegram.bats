@@ -21,9 +21,17 @@ setup() {
 @test "telegram_getme_username fails on ok:false" {
   run telegram_getme_username '{"ok":false,"error_code":401,"description":"Unauthorized"}'
   [ "$status" -eq 1 ]
+  [ -z "$output" ]
 }
 
 @test "telegram_getme_username fails on garbage" {
   run telegram_getme_username 'not json at all'
   [ "$status" -eq 1 ]
+  [ -z "$output" ]
+}
+
+@test "telegram_getme_username fails when ok:true but no username field" {
+  run telegram_getme_username '{"ok":true,"result":{"id":42}}'
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
 }
