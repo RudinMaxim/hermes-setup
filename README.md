@@ -6,7 +6,7 @@
 
 - Подготавливает Debian/Ubuntu VPS: отдельный пользователь `hermes`, вход по SSH-ключу, UFW, fail2ban, unattended-upgrades.
 - Запускает Hermes Agent в Docker-контейнере: `docker exec -it hermes hermes chat`.
-- Позволяет включать MCP-серверы через `config/mcp.toml`: Filesystem, GitHub, Context7, Memory, Playwright, Postgres, Docker.
+- Позволяет включать MCP-серверы через `config/mcp.toml`: Filesystem, GitHub, Context7, Memory, Playwright, Google Drive, Postgres, Docker.
 - Монтирует директорию для Filesystem MCP через `HERMES_PROJECTS_DIR` (по умолчанию `/home/hermes/projects`) в контейнер как `/home/hermes/projects`.
 - Поддерживает Telegram gateway для повседневного доступа, если в `config/gateways.toml` включить `[telegram] enabled = true`.
 - Скрипты можно запускать повторно: они проверяют текущее состояние и пропускают уже выполненные шаги.

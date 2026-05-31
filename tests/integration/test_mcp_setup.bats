@@ -181,6 +181,48 @@ STUB
   rm -rf /tmp/bin-stub /tmp/.mcp-add
 }
 
+@test "setup-mcp.sh registers Google Drive as remote OAuth MCP" {
+  sed -i '/^\[google_drive\]/,/^$/ s|^enabled = false$|enabled = true|' "$REPO_ROOT/config/mcp.toml"
+  sed -i 's|^GOOGLE_DRIVE_OAUTH_CLIENT_ID=$|GOOGLE_DRIVE_OAUTH_CLIENT_ID=client-id.apps.googleusercontent.com|' "$REPO_ROOT/config/.env"
+  sed -i 's|^GOOGLE_DRIVE_OAUTH_CLIENT_SECRET=$|GOOGLE_DRIVE_OAUTH_CLIENT_SECRET=client-secret|' "$REPO_ROOT/config/.env"
+
+  mkdir -p /tmp/bin-stub
+  cat >/tmp/bin-stub/docker <<'STUB'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "ps -a") echo hermes ;;
+  "inspect -f") echo running ;;
+  "exec hermes")
+    shift 2
+    case "$*" in
+      "hermes mcp test google_drive") echo "unexpected smoke test for oauth mcp" >&2; exit 1 ;;
+      *) echo "exec-stub: $*" ;;
+    esac ;;
+  "exec -i")
+    shift 3
+    case "$*" in
+      "python3 - google_drive") exit 1 ;;
+      "python3 - google_drive http "*"https://drivemcp.googleapis.com/mcp/v1"*"oauth"*"GOOGLE_DRIVE_OAUTH_CLIENT_ID"*"GOOGLE_DRIVE_OAUTH_CLIENT_SECRET"*)
+        printf '%s\n' "$*" > /tmp/.gdrive-mcp-add ;;
+      *) echo "exec-i-stub: $*" ;;
+    esac ;;
+  *) echo "stub: $*" ;;
+esac
+STUB
+  chmod +x /tmp/bin-stub/docker
+  rm -f /tmp/.gdrive-mcp-add
+
+  run su hermes -c "PATH=/tmp/bin-stub:$PATH bash '$SCRIPTS/setup-mcp.sh'"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"OAuth login required"* ]]
+  grep -q -- 'google_drive http' /tmp/.gdrive-mcp-add
+  grep -q -- 'https://drivemcp.googleapis.com/mcp/v1' /tmp/.gdrive-mcp-add
+  grep -q -- 'oauth GOOGLE_DRIVE_OAUTH_CLIENT_ID GOOGLE_DRIVE_OAUTH_CLIENT_SECRET' /tmp/.gdrive-mcp-add
+  grep -q -- 'https://www.googleapis.com/auth/drive.readonly,https://www.googleapis.com/auth/drive.metadata.readonly' /tmp/.gdrive-mcp-add
+
+  rm -rf /tmp/bin-stub /tmp/.gdrive-mcp-add
+}
+
 @test "setup-mcp.sh refuses docker_mcp without acknowledge_socket_risk" {
   sed -i '/^\[docker_mcp\]/,/^$/ s|^enabled = false$|enabled = true|' "$REPO_ROOT/config/mcp.toml"
 

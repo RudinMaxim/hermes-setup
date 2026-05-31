@@ -124,17 +124,32 @@ require_safe_pkg_name() {
     die "rejecting unsafe package name '$pkg' — must match @a-zA-Z0-9._/-"
 }
 
+join_csv() {
+  local IFS=,
+  printf '%s' "$*"
+}
+
 write_hermes_mcp_config() {
-  local mcp="$1" transport="$2" command="$3" url="$4" env_csv="$5"
-  shift 5
-  docker exec -i hermes python3 - "$mcp" "$transport" "$command" "$url" "$env_csv" "$@" <<'PY'
-import os
+  local mcp="$1" transport="$2" command="$3" url="$4" env_csv="$5" auth="$6" oauth_client_id_env="$7" oauth_client_secret_env="$8" scopes_csv="$9"
+  shift 9
+  docker exec -i hermes python3 - "$mcp" "$transport" "$command" "$url" "$env_csv" "$auth" "$oauth_client_id_env" "$oauth_client_secret_env" "$scopes_csv" "$@" <<'PY'
 import sys
 from pathlib import Path
 
 import yaml
 
-name, transport, command, url, env_csv, *cmd_args = sys.argv[1:]
+(
+    name,
+    transport,
+    command,
+    url,
+    env_csv,
+    auth,
+    oauth_client_id_env,
+    oauth_client_secret_env,
+    scopes_csv,
+    *cmd_args,
+) = sys.argv[1:]
 path = Path("/home/hermes/.hermes/config.yaml")
 path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -153,6 +168,20 @@ if transport == "http":
 else:
     server["command"] = command
     server["args"] = cmd_args
+
+if auth:
+    server["auth"] = auth
+    if auth == "oauth":
+        oauth = {}
+        if oauth_client_id_env:
+            oauth["client_id"] = "${" + oauth_client_id_env + "}"
+        if oauth_client_secret_env:
+            oauth["client_secret"] = "${" + oauth_client_secret_env + "}"
+        scopes = [item for item in scopes_csv.split(",") if item]
+        if scopes:
+            oauth["scope"] = " ".join(scopes)
+        if oauth:
+            server["oauth"] = oauth
 
 env_names = [item for item in env_csv.split(",") if item]
 if env_names:
@@ -223,9 +252,9 @@ deploy_stdio_mcp() {
       mount=$(toml_get "$TOML" "$mcp" mount) || die "mcp.$mcp: missing 'mount'"
       cmd_args+=("$mount")
     fi
-    env_csv=$(IFS=,; printf '%s' "${env_names[*]}")
+    env_csv=$(join_csv "${env_names[@]}")
     set +e
-    write_hermes_mcp_config "$mcp" stdio npx "" "$env_csv" "${cmd_args[@]}"
+    write_hermes_mcp_config "$mcp" stdio npx "" "$env_csv" "" "" "" "" "${cmd_args[@]}"
     rc=$?
     set -e
     case "$rc" in
@@ -238,25 +267,38 @@ deploy_stdio_mcp() {
 
 deploy_http_mcp() {
   local mcp="$1"
-  local port
-  port=$(toml_get "$TOML" "$mcp" port) || die "mcp.$mcp: missing 'port'"
+  local url
+  url=$(toml_get "$TOML" "$mcp" url 2>/dev/null || true)
 
-  local service="mcp-$mcp"
-  if docker_container_running "$service"; then
-    log_skip "mcp.$mcp: container $service already running"
-  else
-    log_act "starting compose service $service (profile $mcp)"
-    docker compose -f "$CONFIG_DIR/docker-compose.mcp.yml" --profile "$mcp" up -d "$service" >/dev/null
-    log_ok "started $service"
+  if [[ -z "$url" ]]; then
+    local port service
+    port=$(toml_get "$TOML" "$mcp" port) || die "mcp.$mcp: missing 'port' or 'url'"
+    service="mcp-$mcp"
+    url="http://$service:$port"
+    if docker_container_running "$service"; then
+      log_skip "mcp.$mcp: container $service already running"
+    else
+      log_act "starting compose service $service (profile $mcp)"
+      docker compose -f "$CONFIG_DIR/docker-compose.mcp.yml" --profile "$mcp" up -d "$service" >/dev/null
+      log_ok "started $service"
+    fi
   fi
 
   if mcp_registered_in_hermes "$mcp"; then
     log_skip "mcp.$mcp: already registered in hermes"
   else
     log_act "registering mcp '$mcp' (http)"
-    local rc
+    local rc auth oauth_client_id_env oauth_client_secret_env scopes=() scopes_csv
+    auth=$(toml_get "$TOML" "$mcp" auth 2>/dev/null || true)
+    oauth_client_id_env=$(toml_get "$TOML" "$mcp" oauth_client_id_env 2>/dev/null || true)
+    oauth_client_secret_env=$(toml_get "$TOML" "$mcp" oauth_client_secret_env 2>/dev/null || true)
+    while IFS= read -r scope; do
+      [[ -z "$scope" ]] && continue
+      scopes+=("$scope")
+    done < <(toml_get_array "$TOML" "$mcp" scopes 2>/dev/null || true)
+    scopes_csv=$(join_csv "${scopes[@]}")
     set +e
-    write_hermes_mcp_config "$mcp" http "" "http://$service:$port" ""
+    write_hermes_mcp_config "$mcp" http "" "$url" "" "$auth" "$oauth_client_id_env" "$oauth_client_secret_env" "$scopes_csv"
     rc=$?
     set -e
     case "$rc" in
@@ -304,6 +346,11 @@ main() {
       http)  deploy_http_mcp "$mcp" ;;
       *)     log_warn "mcp.$mcp: unknown transport '$transport' — skipping"; continue ;;
     esac
+
+    if [[ "$(toml_get "$TOML" "$mcp" auth 2>/dev/null || true)" == "oauth" ]]; then
+      log_warn "mcp.$mcp: OAuth login required — run: docker exec -it hermes hermes mcp login $mcp"
+      continue
+    fi
 
     # Smoke-test the registration. Some Hermes builds may not implement
     # `mcp test`; we treat anything other than a non-zero subcommand-missing
