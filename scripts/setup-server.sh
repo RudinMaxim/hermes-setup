@@ -193,16 +193,19 @@ EOF
   log_ok "ssh reloaded"
 }
 
+# _ensure_ufw_rule PATTERN ufw-arg [ufw-arg...]
+# Pass the ufw command as separate arguments — do NOT rely on word-splitting,
+# since this script sets IFS=$'\n\t' (no space), so "ufw $rule" would pass the
+# whole rule as a single argument and ufw rejects it ("Invalid syntax").
 _ensure_ufw_rule() {
-  local rule="$1" pattern="$2"
+  local pattern="$1"; shift
   if ufw_rule_present "$pattern"; then
-    log_skip "ufw rule '$rule' already present"
+    log_skip "ufw rule '$*' already present"
     return 0
   fi
-  log_act "ufw $rule"
-  # shellcheck disable=SC2086
-  ufw $rule >/dev/null
-  log_ok "ufw rule added: $rule"
+  log_act "ufw $*"
+  ufw "$@" >/dev/null
+  log_ok "ufw rule added: $*"
 }
 
 ensure_ufw() {
@@ -215,8 +218,8 @@ ensure_ufw() {
     log_ok "ufw defaults set"
   fi
 
-  _ensure_ufw_rule "limit 22/tcp"  '22/tcp[[:space:]]+LIMIT'
-  _ensure_ufw_rule "allow 80/tcp"  '80/tcp[[:space:]]+ALLOW'
+  _ensure_ufw_rule '22/tcp[[:space:]]+LIMIT' limit 22/tcp
+  _ensure_ufw_rule '80/tcp[[:space:]]+ALLOW' allow 80/tcp
   _ensure_ufw_rule "allow 443/tcp" '443/tcp[[:space:]]+ALLOW'
 
   if ufw status 2>/dev/null | grep -qE '^Status:[[:space:]]+active'; then
