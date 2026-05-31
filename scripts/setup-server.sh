@@ -199,13 +199,15 @@ EOF
 # whole rule as a single argument and ufw rejects it ("Invalid syntax").
 _ensure_ufw_rule() {
   local pattern="$1"; shift
+  # Join args with spaces for display (IFS has no space, so "$*" would use \n).
+  local pretty; pretty="$(printf '%s ' "$@")"; pretty="${pretty% }"
   if ufw_rule_present "$pattern"; then
-    log_skip "ufw rule '$*' already present"
+    log_skip "ufw rule '$pretty' already present"
     return 0
   fi
-  log_act "ufw $*"
+  log_act "ufw $pretty"
   ufw "$@" >/dev/null
-  log_ok "ufw rule added: $*"
+  log_ok "ufw rule added: $pretty"
 }
 
 ensure_ufw() {
@@ -220,7 +222,7 @@ ensure_ufw() {
 
   _ensure_ufw_rule '22/tcp[[:space:]]+LIMIT' limit 22/tcp
   _ensure_ufw_rule '80/tcp[[:space:]]+ALLOW' allow 80/tcp
-  _ensure_ufw_rule "allow 443/tcp" '443/tcp[[:space:]]+ALLOW'
+  _ensure_ufw_rule '443/tcp[[:space:]]+ALLOW' allow 443/tcp
 
   if ufw status 2>/dev/null | grep -qE '^Status:[[:space:]]+active'; then
     log_skip "ufw already active"
