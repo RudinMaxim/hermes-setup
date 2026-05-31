@@ -8,61 +8,109 @@ setup() {
   source "$LIB/checks.sh"
   # shellcheck source=/dev/null
   source "$LIB/prompt.sh"
+  TMPDIR_T="$(mktemp -d)"
+  ENVF="$TMPDIR_T/.env"
+}
+
+teardown() {
+  rm -rf "$TMPDIR_T"
 }
 
 @test "set_env_value appends a new key" {
-  local tmp; tmp=$(mktemp)
-  echo "EXISTING=1" > "$tmp"
-  run set_env_value "$tmp" NEWKEY hello
+  echo "EXISTING=1" > "$ENVF"
+  run set_env_value "$ENVF" NEWKEY hello
   [ "$status" -eq 0 ]
-  run read_env_value "$tmp" NEWKEY
+  run read_env_value "$ENVF" NEWKEY
   [ "$output" = "hello" ]
-  rm -f "$tmp"
 }
 
 @test "set_env_value replaces an existing key" {
-  local tmp; tmp=$(mktemp)
-  printf 'FOO=old\nBAR=keep\n' > "$tmp"
-  run set_env_value "$tmp" FOO new
+  printf 'FOO=old\nBAR=keep\n' > "$ENVF"
+  run set_env_value "$ENVF" FOO new
   [ "$status" -eq 0 ]
-  run read_env_value "$tmp" FOO
+  run read_env_value "$ENVF" FOO
   [ "$output" = "new" ]
-  run read_env_value "$tmp" BAR
+  run read_env_value "$ENVF" BAR
   [ "$output" = "keep" ]
-  rm -f "$tmp"
 }
 
 @test "set_env_value returns 1 and does not rewrite when value unchanged" {
-  local tmp; tmp=$(mktemp)
-  echo "FOO=same" > "$tmp"
-  local before; before=$(cat "$tmp")
-  run set_env_value "$tmp" FOO same
+  echo "FOO=same" > "$ENVF"
+  local before; before=$(cat "$ENVF")
+  run set_env_value "$ENVF" FOO same
   [ "$status" -eq 1 ]
-  [ "$(cat "$tmp")" = "$before" ]
-  rm -f "$tmp"
+  [ "$(cat "$ENVF")" = "$before" ]
 }
 
 @test "set_env_value preserves special characters in the value verbatim" {
-  local tmp; tmp=$(mktemp)
-  : > "$tmp"
-  set_env_value "$tmp" POSTGRES_URL 'postgresql://u:p@h:5432/db?x=1&y=2'
-  run read_env_value "$tmp" POSTGRES_URL
+  : > "$ENVF"
+  run set_env_value "$ENVF" POSTGRES_URL 'postgresql://u:p@h:5432/db?x=1&y=2'
+  [ "$status" -eq 0 ]
+  run read_env_value "$ENVF" POSTGRES_URL
   [ "$output" = 'postgresql://u:p@h:5432/db?x=1&y=2' ]
-  rm -f "$tmp"
 }
 
 @test "set_env_value does not match a commented key (appends instead)" {
-  local tmp; tmp=$(mktemp)
-  printf '# FOO=commented\n' > "$tmp"
-  run set_env_value "$tmp" FOO real
+  printf '# FOO=commented\n' > "$ENVF"
+  run set_env_value "$ENVF" FOO real
   [ "$status" -eq 0 ]
-  run read_env_value "$tmp" FOO
+  run read_env_value "$ENVF" FOO
   [ "$output" = "real" ]
-  grep -q '^# FOO=commented$' "$tmp"
-  rm -f "$tmp"
+  grep -q '^# FOO=commented$' "$ENVF"
+}
+
+@test "set_env_value handles a file with no trailing newline" {
+  printf 'FOO=old' > "$ENVF"   # no trailing newline
+  run set_env_value "$ENVF" BAR added
+  [ "$status" -eq 0 ]
+  run read_env_value "$ENVF" FOO
+  [ "$output" = "old" ]
+  run read_env_value "$ENVF" BAR
+  [ "$output" = "added" ]
+}
+
+@test "set_env_value replaces only the first occurrence of a duplicated key" {
+  printf 'FOO=first\nFOO=second\n' > "$ENVF"
+  run set_env_value "$ENVF" FOO updated
+  [ "$status" -eq 0 ]
+  # first line replaced, second left untouched
+  [ "$(grep -c '^FOO=' "$ENVF")" -eq 2 ]
+  grep -q '^FOO=updated$' "$ENVF"
+  grep -q '^FOO=second$' "$ENVF"
+}
+
+@test "set_env_value creates a missing file with 0600 perms" {
+  local f="$TMPDIR_T/new.env"
+  run set_env_value "$f" KEY val
+  [ "$status" -eq 0 ]
+  # 0600 => owner rw only. Accept that some filesystems (e.g. Windows) cannot
+  # represent this; skip the perms assertion there but still require the value.
+  run read_env_value "$f" KEY
+  [ "$output" = "val" ]
+  local mode; mode=$(stat -c '%a' "$f" 2>/dev/null || echo "")
+  if [ -n "$mode" ] && [ "$mode" != "600" ]; then
+    # Only fail on a real POSIX fs that reports a non-600 mode.
+    case "$(uname -s)" in
+      Linux|Darwin) echo "expected 600, got $mode"; false ;;
+      *) skip "filesystem does not enforce POSIX perms ($mode)" ;;
+    esac
+  fi
 }
 
 @test "is_interactive is false when HERMES_NONINTERACTIVE=1" {
   HERMES_NONINTERACTIVE=1 run is_interactive
+  [ "$status" -eq 1 ]
+}
+
+@test "prompt_value echoes the entered line" {
+  run bash -c 'source '"$LIB"'/log.sh; source '"$LIB"'/checks.sh; source '"$LIB"'/prompt.sh; printf "myvalue\n" | { prompt_value "x"; }'
+  [ "$status" -eq 0 ]
+  [ "$output" = "myvalue" ]
+}
+
+@test "confirm returns 0 on y and 1 on n" {
+  run bash -c 'source '"$LIB"'/prompt.sh; printf "y\n" | confirm "ok"'
+  [ "$status" -eq 0 ]
+  run bash -c 'source '"$LIB"'/prompt.sh; printf "n\n" | confirm "ok"'
   [ "$status" -eq 1 ]
 }
