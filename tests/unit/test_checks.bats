@@ -75,3 +75,54 @@ EOF
   [ "$status" -eq 1 ]
   rm -f "$tmp"
 }
+
+@test "is_numeric_csv accepts a single numeric id" {
+  run is_numeric_csv "123"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_numeric_csv accepts comma-separated numeric ids" {
+  run is_numeric_csv "123,456,789"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_numeric_csv rejects non-numeric content" {
+  run is_numeric_csv "123,abc"
+  [ "$status" -eq 1 ]
+}
+
+@test "is_numeric_csv rejects empty string" {
+  run is_numeric_csv ""
+  [ "$status" -eq 1 ]
+}
+
+@test "is_numeric_csv rejects trailing comma" {
+  run is_numeric_csv "12,"
+  [ "$status" -eq 1 ]
+}
+
+@test "read_env_value prints the value for a key" {
+  local tmp; tmp=$(mktemp)
+  echo "FOO=bar" > "$tmp"
+  run read_env_value "$tmp" FOO
+  [ "$status" -eq 0 ]
+  [ "$output" = "bar" ]
+  rm -f "$tmp"
+}
+
+@test "read_env_value ignores commented lines" {
+  local tmp; tmp=$(mktemp)
+  printf '# FOO=commented\nFOO=actual\n' > "$tmp"
+  run read_env_value "$tmp" FOO
+  [ "$status" -eq 0 ]
+  [ "$output" = "actual" ]
+  rm -f "$tmp"
+}
+
+@test "read_env_value exits 1 when key absent" {
+  local tmp; tmp=$(mktemp)
+  echo "BAR=baz" > "$tmp"
+  run read_env_value "$tmp" FOO
+  [ "$status" -eq 1 ]
+  rm -f "$tmp"
+}

@@ -67,3 +67,32 @@ env_var_set_in_file() {
 ufw_rule_present() {
   ufw status verbose 2>/dev/null | grep -qE "$1"
 }
+
+# is_numeric_csv "123,456" -> 0 ; "123,abc" / "" / "12," -> 1
+is_numeric_csv() {
+  local v="$1"
+  [[ -n "$v" ]] || return 1
+  [[ "$v" =~ ^[0-9]+(,[0-9]+)*$ ]]
+}
+
+# read_env_value FILE KEY -> prints the value (comments/whitespace stripped),
+# exit 1 if the key is absent. Complements env_var_set_in_file (boolean only).
+# awk with a literal key match — no regex injection from $key.
+read_env_value() {
+  local file="$1" key="$2"
+  [[ -f "$file" ]] || return 1
+  awk -v k="$key" '
+    {
+      sub(/^[[:space:]]+/, "")
+      if ($0 ~ /^#/) next
+      eq = index($0, "=")
+      if (eq == 0) next
+      lhs = substr($0, 1, eq-1); sub(/[[:space:]]+$/, "", lhs)
+      if (lhs != k) next
+      rhs = substr($0, eq+1)
+      sub(/^[[:space:]]+/, "", rhs); sub(/[[:space:]]+$/, "", rhs)
+      print rhs; found = 1; exit
+    }
+    END { exit (found ? 0 : 1) }
+  ' "$file"
+}
