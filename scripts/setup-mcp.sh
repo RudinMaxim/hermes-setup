@@ -9,6 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG_DIR="$REPO_ROOT/config"
 TOML="$CONFIG_DIR/mcp.toml"
+TOML_EXAMPLE="$CONFIG_DIR/mcp.toml.example"
 ENVFILE="$CONFIG_DIR/.env"
 
 # shellcheck source=lib/log.sh
@@ -35,7 +36,36 @@ require_hermes_running() {
 
 require_files() {
   [[ -f "$TOML" ]] || die "missing $TOML"
+  [[ -f "$TOML_EXAMPLE" ]] || die "missing $TOML_EXAMPLE"
   [[ -f "$ENVFILE" ]] || die "missing $ENVFILE"
+}
+
+sync_missing_example_sections() {
+  local section
+  for section in $(toml_sections "$TOML_EXAMPLE"); do
+    if toml_sections "$TOML" | grep -qxF -- "$section"; then
+      continue
+    fi
+
+    {
+      printf '\n'
+      awk -v sec="$section" '
+        BEGIN { in_section = 0 }
+        /^[[:space:]]*\[[^]]+\][[:space:]]*$/ {
+          cur = $0
+          gsub(/^[[:space:]]*\[|\][[:space:]]*$/, "", cur)
+          if (cur == sec) {
+            in_section = 1
+            print
+            next
+          }
+          if (in_section) exit
+        }
+        in_section { print }
+      ' "$TOML_EXAMPLE"
+    } >>"$TOML"
+    log_ok "added mcp.$section to config/mcp.toml from example"
+  done
 }
 
 enabled_mcps() {
@@ -311,6 +341,7 @@ deploy_http_mcp() {
 
 main() {
   require_files
+  sync_missing_example_sections
   require_hermes_running
 
   local mcp
