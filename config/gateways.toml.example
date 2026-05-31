@@ -1,0 +1,18 @@
+# config/gateways.toml.example
+# Copy to config/gateways.toml and flip `enabled` for the gateway you want.
+# Secrets live in config/.env, NOT here.
+
+[telegram]
+# Daily access via a Telegram bot. Requires TELEGRAM_BOT_TOKEN and a numeric,
+# comma-separated TELEGRAM_ALLOWED_USERS in config/.env (default-deny).
+# See docs/gateways/telegram.md for BotFather setup and how to find your user ID.
+enabled = false
+requires = ["TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOWED_USERS"]
+
+[webui]
+# Phase 2 — NOT implemented yet. setup-gateway.sh warns and ignores enabled=true.
+# domain empty  -> localhost only, reach via `ssh -L 8080:localhost:8080`
+# domain set    -> Caddy reverse-proxy with Let's Encrypt HTTPS (needs DNS A record)
+enabled = false
+domain  = ""
+requires = []

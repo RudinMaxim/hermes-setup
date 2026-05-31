@@ -1,6 +1,7 @@
 # Local secrets / state
 config/.env
 config/mcp.toml
+config/gateways.toml
 
 # Test artifacts
 tests/.bats-tmp/

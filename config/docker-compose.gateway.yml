@@ -1,0 +1,12 @@
+# config/docker-compose.gateway.yml
+# Override merged on top of docker-compose.yml by scripts/setup-gateway.sh when a
+# messaging gateway is enabled. Replaces the container command with the
+# foreground gateway runner so `hermes gateway run` becomes PID 1.
+#
+#   docker compose -f config/docker-compose.yml -f config/docker-compose.gateway.yml up -d
+#
+# TELEGRAM_BOT_TOKEN / TELEGRAM_ALLOWED_USERS are already injected via the base
+# compose `env_file: ./.env`, so no extra env wiring is needed here.
+services:
+  hermes:
+    command: ["hermes", "gateway", "run"]
