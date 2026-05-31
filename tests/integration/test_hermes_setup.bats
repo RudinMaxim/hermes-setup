@@ -90,3 +90,26 @@ STUB
 
   rm -rf /tmp/bin-stub /tmp/.docker-stub-state /tmp/.docker-stub-container
 }
+
+@test "setup-hermes.sh creates gateways.toml from the example" {
+  rm -f "$REPO_ROOT/config/.env" "$REPO_ROOT/config/mcp.toml" "$REPO_ROOT/config/gateways.toml"
+  cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
+  sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"
+  run su hermes -c "bash '$SCRIPTS/setup-hermes.sh' --configs-only"
+  [ "$status" -eq 0 ]
+  [ -f "$REPO_ROOT/config/gateways.toml" ]
+}
+
+@test "setup-hermes.sh still dies without an LLM key in non-interactive mode" {
+  : > "$REPO_ROOT/config/.env"
+  run su hermes -c "HERMES_NONINTERACTIVE=1 bash '$SCRIPTS/setup-hermes.sh' --configs-only"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"no LLM API key configured"* ]]
+}
+
+@test "setup-hermes.sh accepts the --non-interactive flag" {
+  cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
+  sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"
+  run su hermes -c "bash '$SCRIPTS/setup-hermes.sh' --configs-only --non-interactive"
+  [ "$status" -eq 0 ]
+}

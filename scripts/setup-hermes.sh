@@ -9,6 +9,7 @@ IFS=$'\n\t'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG_DIR="$REPO_ROOT/config"
+ENVFILE="$CONFIG_DIR/.env"
 
 # shellcheck source=lib/log.sh
 source "$SCRIPT_DIR/lib/log.sh"
@@ -16,11 +17,14 @@ source "$SCRIPT_DIR/lib/log.sh"
 source "$SCRIPT_DIR/lib/checks.sh"
 # shellcheck source=lib/write_file.sh
 source "$SCRIPT_DIR/lib/write_file.sh"
+# shellcheck source=lib/prompt.sh
+source "$SCRIPT_DIR/lib/prompt.sh"
 
 CONFIGS_ONLY=0
 for arg in "$@"; do
   case "$arg" in
-    --configs-only) CONFIGS_ONLY=1 ;;
+    --configs-only)    CONFIGS_ONLY=1 ;;
+    --non-interactive) export HERMES_NONINTERACTIVE=1 ;;
     *) die "unknown argument: $arg" ;;
   esac
 done
@@ -56,15 +60,37 @@ ensure_configs() {
   else
     log_skip "mcp.toml already exists"
   fi
+
+  if [[ ! -f "$CONFIG_DIR/gateways.toml" ]]; then
+    log_act "copying gateways.toml.example -> gateways.toml"
+    cp "$CONFIG_DIR/gateways.toml.example" "$CONFIG_DIR/gateways.toml"
+    log_ok "gateways.toml created"
+  else
+    log_skip "gateways.toml already exists"
+  fi
 }
 
 ensure_llm_key() {
-  if env_var_set_in_file "$CONFIG_DIR/.env" OPENAI_API_KEY \
-     || env_var_set_in_file "$CONFIG_DIR/.env" ANTHROPIC_API_KEY; then
+  if env_var_set_in_file "$ENVFILE" OPENAI_API_KEY \
+     || env_var_set_in_file "$ENVFILE" ANTHROPIC_API_KEY; then
     log_ok "LLM API key present in .env"
     return 0
   fi
-  die "no LLM API key configured — set OPENAI_API_KEY or ANTHROPIC_API_KEY in $CONFIG_DIR/.env (see docs/02-hermes-setup.md)"
+  if is_interactive; then
+    local provider var key
+    provider=$(prompt_value "LLM provider (openai/anthropic)")
+    case "$provider" in
+      anthropic|Anthropic|ANTHROPIC) var=ANTHROPIC_API_KEY ;;
+      *)                             var=OPENAI_API_KEY ;;
+    esac
+    key=$(prompt_secret "$var")
+    [[ -n "$key" ]] || die "empty API key entered — aborting"
+    log_act "saving $var to .env"
+    set_env_value "$ENVFILE" "$var" "$key" >/dev/null
+    log_ok "$var saved to .env (${#key} chars)"
+    return 0
+  fi
+  die "no LLM API key configured — set OPENAI_API_KEY or ANTHROPIC_API_KEY in $ENVFILE (see docs/02-hermes-setup.md)"
 }
 
 ensure_image() {
