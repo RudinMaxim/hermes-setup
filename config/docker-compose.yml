@@ -19,10 +19,17 @@ services:
     stdin_open: true
     tty: true
 
+# Both the volume and the network are created by scripts/setup-hermes.sh
+# (ensure_volume / ensure_network) so they can be shared with the MCP compose
+# file. Declared external here so compose attaches instead of trying to own
+# them — otherwise compose errors with "network exists but was not created by
+# compose".
 volumes:
   hermes_data:
+    external: true
     name: hermes_data
 
 networks:
   hermes_net:
+    external: true
     name: hermes_net
