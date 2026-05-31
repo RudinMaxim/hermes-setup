@@ -34,6 +34,13 @@ teardown() {
   [ "$output" = "keep" ]
 }
 
+@test "set_env_value is safe under nounset" {
+  printf 'FOO=old\n' > "$ENVF"
+  run bash -u -c 'source "$1/log.sh"; source "$1/checks.sh"; source "$1/prompt.sh"; set_env_value "$2" FOO new; read_env_value "$2" FOO' _ "$LIB" "$ENVF"
+  [ "$status" -eq 0 ]
+  [ "$output" = "new" ]
+}
+
 @test "set_env_value returns 1 and does not rewrite when value unchanged" {
   echo "FOO=same" > "$ENVF"
   local before; before=$(cat "$ENVF")

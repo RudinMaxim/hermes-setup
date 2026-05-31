@@ -53,7 +53,7 @@ set_env_value() {
 
   local tmp
   tmp=$(mktemp "${file}.XXXXXX") || return 1
-  trap 'rm -f "$tmp"' RETURN
+  trap 'rm -f "${tmp:-}"' RETURN
   # Match the original file's mode on the replacement (mktemp starts at 0600).
   chmod --reference="$file" "$tmp" 2>/dev/null || true
 
@@ -76,5 +76,6 @@ set_env_value() {
   ' "$file" >"$tmp"
 
   mv -f "$tmp" "$file"   # atomic rename within the same directory
+  trap - RETURN
   return 0
 }
