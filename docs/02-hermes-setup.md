@@ -67,6 +67,20 @@ docker exec -it hermes bash -c 'nano /home/hermes/.hermes/SOUL.md'
 docker exec hermes hermes config reload
 ```
 
+## Optional: messaging gateways
+
+For daily use without the CLI, enable a gateway in `config/gateways.toml` and run
+`./scripts/setup-gateway.sh`. Phase 1 supports **Telegram** — see
+[docs/gateways/telegram.md](gateways/telegram.md) for BotFather setup, finding
+your user ID, and privacy mode.
+
+## Interactive setup
+
+Run `./setup.sh` from the repo root (as the `hermes` user) to chain the
+hermes-side steps. In a terminal it prompts for any missing secrets (LLM key,
+Telegram token) and writes them to `config/.env`; pass `--non-interactive` (or
+set `HERMES_NONINTERACTIVE=1`) to disable all prompts for scripted runs.
+
 ## Troubleshooting
 
 | Symptom | Check |

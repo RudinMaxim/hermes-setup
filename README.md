@@ -36,15 +36,32 @@ nano config/.env          # set OPENAI_API_KEY=... or ANTHROPIC_API_KEY=...
 # 5. (Optional) Enable MCP servers:
 nano config/mcp.toml      # toggle enabled = true for what you want
 ./scripts/setup-mcp.sh
+
+# 6. (Optional) Enable a Telegram gateway for daily use:
+nano config/gateways.toml # set [telegram] enabled = true
+./scripts/setup-gateway.sh
 ```
 
 `setup-hermes.sh` copies `config/.env.example` → `config/.env` automatically on first run if you skip step 4's `nano`; it will then abort with a clear message asking you to fill the key.
+
+### Quick start (interactive)
+
+Instead of steps 4–6, on the `hermes` user you can run the orchestrator:
+
+```bash
+cd ~/hermes-setup && ./setup.sh
+```
+
+In a terminal it prompts for your LLM API key (and, if you opt in, a Telegram bot
+token), brings Hermes up, then offers the optional gateway / MCP steps. For
+scripted, non-interactive use add `--non-interactive` and pre-fill `config/.env`.
 
 ## Documentation
 
 - [`docs/01-server-setup.md`](docs/01-server-setup.md) — manual steps that aren't automated (provisioning, DNS, backups).
 - [`docs/02-hermes-setup.md`](docs/02-hermes-setup.md) — how to fill in `.env`, troubleshoot, chat with the agent.
 - [`docs/mcp/`](docs/mcp/) — one file per MCP server: where to get the token, what the script does for you.
+- [`docs/gateways/telegram.md`](docs/gateways/telegram.md) — set up the Telegram gateway (BotFather, user IDs, privacy mode).
 - [`docs/superpowers/specs/2026-05-30-hermes-setup-design.md`](docs/superpowers/specs/2026-05-30-hermes-setup-design.md) — full design rationale.
 
 ## Testing
@@ -58,9 +75,10 @@ make test              # both
 ## Layout
 
 ```
-scripts/   setup-server.sh, setup-hermes.sh, setup-mcp.sh + lib/
-config/    .env.example, mcp.toml.example, docker-compose*.yml
+setup.sh   thin hermes-side orchestrator (interactive)
+scripts/   setup-server.sh, setup-hermes.sh, setup-mcp.sh, setup-gateway.sh + lib/
+config/    .env.example, mcp.toml.example, gateways.toml.example, docker-compose*.yml
 docker/    Dockerfile.hermes (fallback build)
-docs/      manual instructions
+docs/      manual instructions (incl. gateways/)
 tests/     bats unit + integration + sandbox Dockerfile
 ```
