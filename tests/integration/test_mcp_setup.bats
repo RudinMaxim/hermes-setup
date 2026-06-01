@@ -289,7 +289,7 @@ STUB
   grep -q -- 'google_drive http' /tmp/.gdrive-mcp-add
   grep -q -- 'https://drivemcp.googleapis.com/mcp/v1' /tmp/.gdrive-mcp-add
   grep -q -- 'oauth GOOGLE_DRIVE_OAUTH_CLIENT_ID GOOGLE_DRIVE_OAUTH_CLIENT_SECRET' /tmp/.gdrive-mcp-add
-  grep -q -- 'https://www.googleapis.com/auth/drive.readonly,https://www.googleapis.com/auth/drive.metadata.readonly' /tmp/.gdrive-mcp-add
+  grep -q -- 'https://www.googleapis.com/auth/drive.readonly,https://www.googleapis.com/auth/drive.file' /tmp/.gdrive-mcp-add
 
   rm -rf /tmp/bin-stub /tmp/.gdrive-mcp-add
 }

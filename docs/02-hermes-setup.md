@@ -78,9 +78,10 @@ Quick checks inside the chat:
 
 ## Customise the SOUL (system prompt)
 
-Hermes uses `~/.hermes/SOUL.md` (inside the volume) as its personality. To edit:
+Hermes keeps `SOUL.md` in its data directory (`$HERMES_HOME`, e.g. `/opt/data`
+on the current image) as its personality. To edit:
 ```bash
-docker exec -it hermes bash -c 'nano /home/hermes/.hermes/SOUL.md'
+docker exec -it hermes bash -lc 'nano "$HERMES_HOME/SOUL.md"'
 docker exec hermes hermes config reload
 ```
 
@@ -105,5 +106,5 @@ set `HERMES_NONINTERACTIVE=1`) to disable all prompts for scripted runs.
 | `current user not in 'docker' group` | After `setup-server.sh` you must log out and back in (group membership is per-session). Or run `newgrp docker`. |
 | Image pull fails, falls back to local build, build takes a long time | First build can be 5-10 min. Subsequent runs are cached. The fallback build uses `HERMES_FALLBACK_BASE_IMAGE` from `config/.env`, defaulting to `public.ecr.aws/docker/library/ubuntu:26.04` to avoid Docker Hub anonymous rate limits for the Ubuntu base image. |
 | Container restarts in a loop | `docker logs --tail=100 hermes`. Common: missing/invalid LLM key (Hermes exits if model can't be initialised). |
-| Hermes still uses the old model | Re-run `./scripts/setup-hermes.sh`; it rewrites `/home/hermes/.hermes/config.yaml` from `HERMES_MODEL_PROVIDER` and `HERMES_MODEL` in `config/.env`. |
+| Hermes still uses the old model | Re-run `./scripts/setup-hermes.sh`; it rewrites Hermes' active `config.yaml` (under `$HERMES_HOME`, e.g. `/opt/data`) from `HERMES_MODEL_PROVIDER` and `HERMES_MODEL` in `config/.env`. |
 | `hermes did not become healthy in 30s` | Check `docker logs hermes` for startup errors. If the network is slow, increase the loop in `scripts/setup-hermes.sh::wait_for_health`. |

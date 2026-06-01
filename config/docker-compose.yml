@@ -7,8 +7,14 @@ services:
     container_name: hermes
     restart: unless-stopped
     env_file: ./.env
+    # Pin HERMES_HOME so the data volume below is mounted exactly where Hermes
+    # stores its state (config.yaml, state.db, sessions, mcp-tokens, SOUL.md).
+    # This image defaults HERMES_HOME=/opt/data; older layouts used
+    # /home/hermes/.hermes. If you change this, change the volume target too.
+    environment:
+      HERMES_HOME: /opt/data
     volumes:
-      - hermes_data:/home/hermes/.hermes
+      - hermes_data:/opt/data
       - ${HERMES_PROJECTS_DIR:-/home/hermes/projects}:/home/hermes/projects
     networks: [hermes_net]
     healthcheck:

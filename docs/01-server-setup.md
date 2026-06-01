@@ -52,7 +52,7 @@ The script does NOT configure backups. Pick one:
 - **Provider snapshot**: most providers offer scheduled snapshots ($1-3/month) — easiest.
 - **Restic to external storage**: write your own systemd timer.
 
-What to back up at minimum: `/home/hermes/.hermes` (inside the `hermes_data` Docker volume) — it contains config, skills, memory.
+What to back up at minimum: the `hermes_data` Docker volume — it is mounted at Hermes' data dir `$HERMES_HOME` (e.g. `/opt/data` on the current image) and contains config, skills, memory, sessions.
 
 ### Optional hardening (not done by the script)
 - Move SSH off port 22 (edit `/etc/ssh/sshd_config.d/99-hermes.conf`, update UFW rule).
