@@ -245,9 +245,12 @@ join_csv() {
 }
 
 write_hermes_mcp_config() {
-  local mcp="$1" transport="$2" command="$3" url="$4" env_csv="$5" auth="$6" oauth_client_id_env="$7" oauth_client_secret_env="$8" scopes_csv="$9"
+  # oauth_client_id / oauth_client_secret are the literal credential VALUES (not
+  # env-var names): Hermes does not expand ${VARS} in the oauth block, and
+  # Google's Drive MCP requires real client credentials in config.yaml.
+  local mcp="$1" transport="$2" command="$3" url="$4" env_csv="$5" auth="$6" oauth_client_id="$7" oauth_client_secret="$8" scopes_csv="$9"
   shift 9
-  docker exec -i hermes python3 - "$mcp" "$transport" "$command" "$url" "$env_csv" "$auth" "$oauth_client_id_env" "$oauth_client_secret_env" "$scopes_csv" "$@" <<'PY'
+  docker exec -i hermes python3 - "$mcp" "$transport" "$command" "$url" "$env_csv" "$auth" "$oauth_client_id" "$oauth_client_secret" "$scopes_csv" "$@" <<'PY'
 import os
 import sys
 from pathlib import Path
@@ -261,8 +264,8 @@ import yaml
     url,
     env_csv,
     auth,
-    oauth_client_id_env,
-    oauth_client_secret_env,
+    oauth_client_id,
+    oauth_client_secret,
     scopes_csv,
     *cmd_args,
 ) = sys.argv[1:]
@@ -290,10 +293,10 @@ if auth:
     server["auth"] = auth
     if auth == "oauth":
         oauth = {}
-        if oauth_client_id_env:
-            oauth["client_id"] = "${" + oauth_client_id_env + "}"
-        if oauth_client_secret_env:
-            oauth["client_secret"] = "${" + oauth_client_secret_env + "}"
+        if oauth_client_id:
+            oauth["client_id"] = oauth_client_id
+        if oauth_client_secret:
+            oauth["client_secret"] = oauth_client_secret
         scopes = [item for item in scopes_csv.split(",") if item]
         if scopes:
             oauth["scope"] = " ".join(scopes)
@@ -402,17 +405,24 @@ deploy_http_mcp() {
   fi
 
   # Always (re)write — idempotent no-op when unchanged, self-healing otherwise.
-  local rc auth oauth_client_id_env oauth_client_secret_env scopes=() scope scopes_csv
+  local rc auth oauth_client_id_env oauth_client_secret_env client_id="" client_secret="" scopes=() scope scopes_csv
   auth=$(toml_get "$TOML" "$mcp" auth 2>/dev/null || true)
   oauth_client_id_env=$(toml_get "$TOML" "$mcp" oauth_client_id_env 2>/dev/null || true)
   oauth_client_secret_env=$(toml_get "$TOML" "$mcp" oauth_client_secret_env 2>/dev/null || true)
+  # Hermes needs the literal OAuth credentials in config.yaml (it does not expand
+  # ${VARS}). Resolve their values from config/.env — check_required_env has
+  # already verified they are present for an enabled MCP that requires them.
+  if [[ "$auth" == "oauth" ]]; then
+    [[ -n "$oauth_client_id_env" ]] && client_id=$(read_env_value "$ENVFILE" "$oauth_client_id_env" 2>/dev/null || true)
+    [[ -n "$oauth_client_secret_env" ]] && client_secret=$(read_env_value "$ENVFILE" "$oauth_client_secret_env" 2>/dev/null || true)
+  fi
   while IFS= read -r scope; do
     [[ -z "$scope" ]] && continue
     scopes+=("$scope")
   done < <(toml_get_array "$TOML" "$mcp" scopes 2>/dev/null || true)
   scopes_csv=$(join_csv "${scopes[@]}")
   set +e
-  write_hermes_mcp_config "$mcp" http "" "$url" "" "$auth" "$oauth_client_id_env" "$oauth_client_secret_env" "$scopes_csv"
+  write_hermes_mcp_config "$mcp" http "" "$url" "" "$auth" "$client_id" "$client_secret" "$scopes_csv"
   rc=$?
   set -e
   case "$rc" in
