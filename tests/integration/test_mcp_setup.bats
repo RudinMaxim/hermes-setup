@@ -140,7 +140,7 @@ STUB
   run su hermes -c "PATH=/tmp/bin-stub:$PATH bash '$SCRIPTS/setup-mcp.sh'"
   [ "$status" -eq 0 ]
   [[ "$output" == *"installing @modelcontextprotocol/server-github"* ]]
-  [[ "$output" == *"registering mcp 'github'"* ]]
+  [[ "$output" == *"registered mcp 'github'"* ]]
 
   rm -rf /tmp/bin-stub
 }

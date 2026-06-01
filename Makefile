@@ -1,11 +1,15 @@
-.PHONY: help test test-unit test-integration test-image clean
+.PHONY: help test test-unit test-integration test-image clean update
 
 help:
+	@echo "update          - git pull + re-sync hermes/mcp/gateway (run on the VPS as hermes)"
 	@echo "test            - run unit + integration tests"
 	@echo "test-unit       - run bats unit tests on host"
 	@echo "test-integration - run integration tests in Docker sandbox"
 	@echo "test-image      - rebuild the test sandbox image"
 	@echo "clean           - remove test artifacts"
+
+update:
+	bash scripts/update.sh
 
 test: test-unit test-integration
 

@@ -225,26 +225,6 @@ check_required_env() {
   return 0
 }
 
-mcp_registered_in_hermes() {
-  docker exec -i hermes python3 - "$1" <<'PY' 2>/dev/null
-import os
-import sys
-from pathlib import Path
-
-import yaml
-
-name = sys.argv[1]
-_hermes_home = os.environ.get("HERMES_HOME")
-path = Path(_hermes_home) / "config.yaml" if _hermes_home else Path("/home/hermes/.hermes/config.yaml")
-if not path.exists():
-    raise SystemExit(1)
-config = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-server = (config.get("mcp_servers") or {}).get(name)
-if not isinstance(server, dict) or server.get("enabled", True) is False:
-    raise SystemExit(1)
-PY
-}
-
 npm_pkg_installed() {
   # Pass package name as argv so it can't escape into shell parsing; grep -F
   # for literal matching (no regex metacharacters).
@@ -376,32 +356,30 @@ deploy_stdio_mcp() {
     log_ok "installed $pkg"
   fi
 
-  if mcp_registered_in_hermes "$mcp"; then
-    log_skip "mcp.$mcp: already registered in hermes"
-  else
-    log_act "registering mcp '$mcp'"
-    local env_names=() cmd_args=() req env_csv rc
-    while IFS= read -r req; do
-      [[ -z "$req" ]] && continue
-      env_names+=("$req")
-    done < <(toml_get_array "$TOML" "$mcp" requires)
-    cmd_args=(-y "$pkg")
-    if [[ "$mcp" == "filesystem" ]]; then
-      local mount
-      mount=$(toml_get "$TOML" "$mcp" mount) || die "mcp.$mcp: missing 'mount'"
-      cmd_args+=("$mount")
-    fi
-    env_csv=$(join_csv "${env_names[@]}")
-    set +e
-    write_hermes_mcp_config "$mcp" stdio npx "" "$env_csv" "" "" "" "" "${cmd_args[@]}"
-    rc=$?
-    set -e
-    case "$rc" in
-      0) log_ok "registered mcp '$mcp'" ;;
-      2) log_skip "mcp.$mcp: already registered in hermes" ;;
-      *) die "mcp.$mcp: could not write Hermes MCP config" ;;
-    esac
+  # Always (re)write the Hermes config entry. write_hermes_mcp_config compares
+  # against what is already there: it is a no-op (rc=2) when nothing changed, so
+  # this stays idempotent while also self-healing a drifted or stale entry.
+  local env_names=() cmd_args=() req env_csv rc
+  while IFS= read -r req; do
+    [[ -z "$req" ]] && continue
+    env_names+=("$req")
+  done < <(toml_get_array "$TOML" "$mcp" requires)
+  cmd_args=(-y "$pkg")
+  if [[ "$mcp" == "filesystem" ]]; then
+    local mount
+    mount=$(toml_get "$TOML" "$mcp" mount) || die "mcp.$mcp: missing 'mount'"
+    cmd_args+=("$mount")
   fi
+  env_csv=$(join_csv "${env_names[@]}")
+  set +e
+  write_hermes_mcp_config "$mcp" stdio npx "" "$env_csv" "" "" "" "" "${cmd_args[@]}"
+  rc=$?
+  set -e
+  case "$rc" in
+    0) log_ok "registered mcp '$mcp'" ;;
+    2) log_skip "mcp.$mcp: already up to date in hermes" ;;
+    *) die "mcp.$mcp: could not write Hermes MCP config" ;;
+  esac
 }
 
 deploy_http_mcp() {
@@ -423,29 +401,25 @@ deploy_http_mcp() {
     fi
   fi
 
-  if mcp_registered_in_hermes "$mcp"; then
-    log_skip "mcp.$mcp: already registered in hermes"
-  else
-    log_act "registering mcp '$mcp' (http)"
-    local rc auth oauth_client_id_env oauth_client_secret_env scopes=() scopes_csv
-    auth=$(toml_get "$TOML" "$mcp" auth 2>/dev/null || true)
-    oauth_client_id_env=$(toml_get "$TOML" "$mcp" oauth_client_id_env 2>/dev/null || true)
-    oauth_client_secret_env=$(toml_get "$TOML" "$mcp" oauth_client_secret_env 2>/dev/null || true)
-    while IFS= read -r scope; do
-      [[ -z "$scope" ]] && continue
-      scopes+=("$scope")
-    done < <(toml_get_array "$TOML" "$mcp" scopes 2>/dev/null || true)
-    scopes_csv=$(join_csv "${scopes[@]}")
-    set +e
-    write_hermes_mcp_config "$mcp" http "" "$url" "" "$auth" "$oauth_client_id_env" "$oauth_client_secret_env" "$scopes_csv"
-    rc=$?
-    set -e
-    case "$rc" in
-      0) log_ok "registered mcp '$mcp'" ;;
-      2) log_skip "mcp.$mcp: already registered in hermes" ;;
-      *) die "mcp.$mcp: could not write Hermes MCP config" ;;
-    esac
-  fi
+  # Always (re)write — idempotent no-op when unchanged, self-healing otherwise.
+  local rc auth oauth_client_id_env oauth_client_secret_env scopes=() scope scopes_csv
+  auth=$(toml_get "$TOML" "$mcp" auth 2>/dev/null || true)
+  oauth_client_id_env=$(toml_get "$TOML" "$mcp" oauth_client_id_env 2>/dev/null || true)
+  oauth_client_secret_env=$(toml_get "$TOML" "$mcp" oauth_client_secret_env 2>/dev/null || true)
+  while IFS= read -r scope; do
+    [[ -z "$scope" ]] && continue
+    scopes+=("$scope")
+  done < <(toml_get_array "$TOML" "$mcp" scopes 2>/dev/null || true)
+  scopes_csv=$(join_csv "${scopes[@]}")
+  set +e
+  write_hermes_mcp_config "$mcp" http "" "$url" "" "$auth" "$oauth_client_id_env" "$oauth_client_secret_env" "$scopes_csv"
+  rc=$?
+  set -e
+  case "$rc" in
+    0) log_ok "registered mcp '$mcp' (http)" ;;
+    2) log_skip "mcp.$mcp: already up to date in hermes" ;;
+    *) die "mcp.$mcp: could not write Hermes MCP config" ;;
+  esac
 }
 
 main() {
