@@ -273,7 +273,7 @@ case "$1 $2" in
     shift 3
     case "$*" in
       "python3 - google_drive") exit 1 ;;
-      "python3 - google_drive http "*"https://drivemcp.googleapis.com/mcp/v1"*"oauth"*"GOOGLE_DRIVE_OAUTH_CLIENT_ID"*"GOOGLE_DRIVE_OAUTH_CLIENT_SECRET"*)
+      "python3 - google_drive http "*"https://drivemcp.googleapis.com/mcp/v1"*"oauth"*"client-id.apps.googleusercontent.com"*"client-secret"*)
         printf '%s\n' "$*" > /tmp/.gdrive-mcp-add ;;
       *) echo "exec-i-stub: $*" ;;
     esac ;;
@@ -288,7 +288,7 @@ STUB
   [[ "$output" == *"OAuth login required"* ]]
   grep -q -- 'google_drive http' /tmp/.gdrive-mcp-add
   grep -q -- 'https://drivemcp.googleapis.com/mcp/v1' /tmp/.gdrive-mcp-add
-  grep -q -- 'oauth GOOGLE_DRIVE_OAUTH_CLIENT_ID GOOGLE_DRIVE_OAUTH_CLIENT_SECRET' /tmp/.gdrive-mcp-add
+  grep -q -- 'oauth client-id.apps.googleusercontent.com client-secret' /tmp/.gdrive-mcp-add
   grep -q -- 'https://www.googleapis.com/auth/drive.readonly,https://www.googleapis.com/auth/drive.file' /tmp/.gdrive-mcp-add
 
   rm -rf /tmp/bin-stub /tmp/.gdrive-mcp-add

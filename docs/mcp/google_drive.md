@@ -123,10 +123,14 @@ $HERMES_HOME/mcp-tokens/
       url: https://drivemcp.googleapis.com/mcp/v1
       auth: oauth
       oauth:
-        client_id: ${GOOGLE_DRIVE_OAUTH_CLIENT_ID}
-        client_secret: ${GOOGLE_DRIVE_OAUTH_CLIENT_SECRET}
+        client_id: "<value of GOOGLE_DRIVE_OAUTH_CLIENT_ID from config/.env>"
+        client_secret: "<value of GOOGLE_DRIVE_OAUTH_CLIENT_SECRET from config/.env>"
         scope: https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file
   ```
+
+  The credentials are written as **literal values** read from `config/.env`,
+  not `${VAR}` placeholders — Hermes does not expand environment variables in
+  the `oauth` block, and Google's Drive MCP requires real client credentials.
 
 - Does not install an npm package; this is a remote HTTP MCP.
 - Does not store Google OAuth tokens in this repo. Hermes stores tokens in its
