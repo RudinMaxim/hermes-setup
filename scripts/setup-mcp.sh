@@ -180,11 +180,13 @@ enabled_mcps() {
 
 configured_mcps_in_hermes() {
   docker exec -i hermes python3 - <<'PY' 2>/dev/null || true
+import os
 from pathlib import Path
 
 import yaml
 
-path = Path("/home/hermes/.hermes/config.yaml")
+_hermes_home = os.environ.get("HERMES_HOME")
+path = Path(_hermes_home) / "config.yaml" if _hermes_home else Path("/home/hermes/.hermes/config.yaml")
 if not path.exists():
     raise SystemExit(0)
 config = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -225,13 +227,15 @@ check_required_env() {
 
 mcp_registered_in_hermes() {
   docker exec -i hermes python3 - "$1" <<'PY' 2>/dev/null
+import os
 import sys
 from pathlib import Path
 
 import yaml
 
 name = sys.argv[1]
-path = Path("/home/hermes/.hermes/config.yaml")
+_hermes_home = os.environ.get("HERMES_HOME")
+path = Path(_hermes_home) / "config.yaml" if _hermes_home else Path("/home/hermes/.hermes/config.yaml")
 if not path.exists():
     raise SystemExit(1)
 config = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -264,6 +268,7 @@ write_hermes_mcp_config() {
   local mcp="$1" transport="$2" command="$3" url="$4" env_csv="$5" auth="$6" oauth_client_id_env="$7" oauth_client_secret_env="$8" scopes_csv="$9"
   shift 9
   docker exec -i hermes python3 - "$mcp" "$transport" "$command" "$url" "$env_csv" "$auth" "$oauth_client_id_env" "$oauth_client_secret_env" "$scopes_csv" "$@" <<'PY'
+import os
 import sys
 from pathlib import Path
 
@@ -281,7 +286,8 @@ import yaml
     scopes_csv,
     *cmd_args,
 ) = sys.argv[1:]
-path = Path("/home/hermes/.hermes/config.yaml")
+_hermes_home = os.environ.get("HERMES_HOME")
+path = Path(_hermes_home) / "config.yaml" if _hermes_home else Path("/home/hermes/.hermes/config.yaml")
 path.parent.mkdir(parents=True, exist_ok=True)
 
 try:
@@ -329,13 +335,15 @@ PY
 remove_hermes_mcp_config() {
   local mcp="$1"
   docker exec -i hermes python3 - "$mcp" <<'PY'
+import os
 import sys
 from pathlib import Path
 
 import yaml
 
 name = sys.argv[1]
-path = Path("/home/hermes/.hermes/config.yaml")
+_hermes_home = os.environ.get("HERMES_HOME")
+path = Path(_hermes_home) / "config.yaml" if _hermes_home else Path("/home/hermes/.hermes/config.yaml")
 if not path.exists():
     raise SystemExit(2)
 

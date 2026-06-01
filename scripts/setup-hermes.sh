@@ -254,7 +254,7 @@ wait_for_health() {
 # enable redact_secrets. If the subcommand isn't supported by this Hermes
 # build, we log a warning and continue — the container is already usable.
 first_run_init() {
-  if docker exec hermes test -f /home/hermes/.hermes/config.yaml; then
+  if docker exec hermes sh -c 'test -f "${HERMES_HOME:-/home/hermes/.hermes}/config.yaml"'; then
     log_skip "hermes config.yaml already exists (first-run init done)"
     return 0
   fi
@@ -297,7 +297,8 @@ from pathlib import Path
 import yaml
 
 provider, model = sys.argv[1:3]
-path = Path("/home/hermes/.hermes/config.yaml")
+_hermes_home = os.environ.get("HERMES_HOME")
+path = Path(_hermes_home) / "config.yaml" if _hermes_home else Path("/home/hermes/.hermes/config.yaml")
 path.parent.mkdir(parents=True, exist_ok=True)
 
 try:

@@ -44,12 +44,13 @@ For data access/scopes, add:
 
 ```text
 https://www.googleapis.com/auth/drive.readonly
-https://www.googleapis.com/auth/drive.metadata.readonly
+https://www.googleapis.com/auth/drive.file
 ```
 
-These scopes let the MCP read/download Drive files and read Drive metadata. They
-are broad Drive scopes; keep this OAuth app in testing mode and only add users
-you trust unless you intend to go through Google's verification process.
+Google's hosted Drive MCP requires exactly these two scopes (`drive.readonly`
+for search/read across your Drive, `drive.file` for per-file create/download).
+Add both on the consent screen. Keep this OAuth app in testing mode and only add
+users you trust unless you intend to go through Google's verification process.
 
 ### 4. Create the OAuth client
 
@@ -103,15 +104,17 @@ account you added as a test user. On a remote VPS, if the browser redirect
 cannot reach the server, copy the final redirect URL from your browser and paste
 it back into the terminal when Hermes asks.
 
-Tokens are stored by Hermes inside the `hermes_data` volume under:
+Tokens are stored by Hermes inside its data directory (`$HERMES_HOME`, e.g.
+`/opt/data` on the current image) under `mcp-tokens/`:
 
 ```text
-/home/hermes/.hermes/mcp-tokens/
+$HERMES_HOME/mcp-tokens/
 ```
 
 ## What the script does
 
-- Writes this server to `/home/hermes/.hermes/config.yaml`:
+- Writes this server into Hermes' active config (`$HERMES_HOME/config.yaml`,
+  e.g. `/opt/data/config.yaml`):
 
   ```yaml
   mcp_servers:
@@ -122,7 +125,7 @@ Tokens are stored by Hermes inside the `hermes_data` volume under:
       oauth:
         client_id: ${GOOGLE_DRIVE_OAUTH_CLIENT_ID}
         client_secret: ${GOOGLE_DRIVE_OAUTH_CLIENT_SECRET}
-        scope: https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.metadata.readonly
+        scope: https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file
   ```
 
 - Does not install an npm package; this is a remote HTTP MCP.
@@ -149,7 +152,7 @@ Find recent Google Drive documents about Hermes setup and summarize them.
 | `redirect_uri_mismatch` | Use an OAuth client type **Desktop app**. If you created a Web client, create a new Desktop client. |
 | Consent screen says app is unverified | Keep the app in testing and add your Google account as a test user, or complete Google's verification process before using it broadly. |
 | Login appears to work but tool calls time out | Re-run `docker exec -it hermes hermes mcp login google_drive`. Google's Drive MCP requires a pre-registered OAuth client; bare dynamic registration is not enough. |
-| Need to switch Google accounts | Revoke the app at https://myaccount.google.com/permissions, remove the cached token in `/home/hermes/.hermes/mcp-tokens/`, then run `hermes mcp login google_drive` again. |
+| Need to switch Google accounts | Revoke the app at https://myaccount.google.com/permissions, remove the cached token in `$HERMES_HOME/mcp-tokens/` (e.g. `/opt/data/mcp-tokens/`), then run `hermes mcp login google_drive` again. |
 
 ## References
 
