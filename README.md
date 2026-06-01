@@ -78,7 +78,18 @@ docker logs --tail=100 hermes               # посмотреть послед�
 ./scripts/setup-hermes.sh                   # синхронизировать config/image/container
 ./scripts/setup-mcp.sh                      # синхронизировать включённые MCP
 ./scripts/setup-gateway.sh                  # включить или выключить Telegram gateway
+./scripts/update.sh                         # git pull + пере-синк всего (hermes/mcp/gateway) + обновить MCP-пакеты
 ```
+
+## Обновление
+
+`./scripts/update.sh` (или `make update`) на VPS под пользователем `hermes`:
+подтягивает свежий репозиторий (`git pull --ff-only`), идемпотентно пере-синкает
+hermes, MCP и gateway, и обновляет npm-пакеты включённых MCP. Флаги:
+`--no-pull` (без git pull), `--no-pkg-update` (без обновления npm-пакетов),
+`--pull-image` (скачать новый образ hermes — применяется только при пересоздании
+контейнера; на работающем хосте сперва убедись, что volume `hermes_data`
+смонтирован в `HERMES_HOME` (`/opt/data`), иначе пересоздание скроет состояние).
 
 ## Документация
 
