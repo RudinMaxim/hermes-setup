@@ -75,6 +75,35 @@ a misleading `[SKIP]`.
 
 ## Google Drive / Workspace from Telegram
 
+### Проверенно рабочая схема
+
+Для Telegram используй встроенный Google Workspace skill, а не remote
+`google_drive` MCP. Remote MCP живёт отдельным OAuth и может снова просить
+авторизацию, даже если Workspace skill уже читает Drive.
+
+Рабочая схема:
+
+1. Авторизовать Google Workspace один раз через CLI-чат Hermes.
+2. Убедиться, что появился `/opt/data/google_token.json`.
+3. Запустить стабилизатор:
+
+```bash
+./scripts/stabilize-google-workspace.sh
+```
+
+После этого в Telegram формулируй запрос явно:
+
+```text
+Используй Google Workspace skill. Покажи последние 5 файлов из моего Google Drive.
+```
+
+Если контейнер gateway пересоздавался, или Telegram снова просит Google OAuth,
+повтори:
+
+```bash
+./scripts/stabilize-google-workspace.sh
+```
+
 If Google Drive works in `docker exec -it hermes hermes chat`, but the Telegram
 bot asks you to authorize again, the usual cause is that two Google integrations
 are enabled at once:

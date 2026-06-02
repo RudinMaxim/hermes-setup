@@ -1,8 +1,51 @@
-# Google Drive MCP — ручное подключение
+# Google Drive / Docs
 
-Поиск и чтение файлов в Google Drive через хостовый MCP Google
-(`https://drivemcp.googleapis.com/mcp/v1`). Авторизация — OAuth, поэтому
-подключается **вручную через агента**: автоматического OAuth-логина в
+Есть два способа дать Hermes доступ к Google Drive:
+
+1. **Встроенный Google Workspace skill** — проверенно рабочий и стабильный путь
+   для Telegram gateway. Он хранит токен в `/opt/data/google_token.json`.
+2. **Remote Google Drive MCP** (`https://drivemcp.googleapis.com/mcp/v1`) —
+   отдельная MCP-интеграция со своим OAuth. Её можно использовать вручную, но
+   для Telegram она не рекомендуется как основной путь: если одновременно
+   включены Workspace skill и remote `google_drive` MCP, Hermes может выбрать
+   MCP и снова попросить OAuth-login.
+
+## Рекомендуемый путь для Telegram
+
+1. Авторизуй Google Workspace через CLI-чат Hermes.
+2. Проверь, что Hermes видит документы из CLI.
+3. Запусти:
+
+```bash
+./scripts/stabilize-google-workspace.sh
+```
+
+Скрипт:
+
+- проверяет `/opt/data/google_token.json`;
+- создаёт совместимую ссылку
+  `/home/hermes/.hermes/google_token.json -> /opt/data/google_token.json`;
+- выключает remote MCP `mcp_servers.google_drive.enabled`;
+- проверяет Hermes config;
+- перезапускает Telegram gateway.
+
+После этого спрашивай в Telegram явно:
+
+```text
+Используй Google Workspace skill. Покажи последние 5 файлов из моего Google Drive.
+```
+
+Если gateway пересоздавался или Telegram снова просит Google OAuth, повтори:
+
+```bash
+./scripts/stabilize-google-workspace.sh
+```
+
+## Remote Google Drive MCP — ручное подключение
+
+Остальная часть инструкции ниже описывает именно remote MCP Google
+(`https://drivemcp.googleapis.com/mcp/v1`). Авторизация — отдельный OAuth,
+поэтому подключается **вручную через агента**: автоматического OAuth-логина в
 `setup.sh` нет.
 
 Google Drive MCP — это удалённый HTTP MCP. Для него не нужно устанавливать npm

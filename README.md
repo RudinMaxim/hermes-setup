@@ -9,6 +9,7 @@
 - Включает MCP-серверы через `config/mcp.toml`: Playwright и Docker (оба включены по умолчанию). Остальные MCP добавляются вручную.
 - Монтирует `HERMES_PROJECTS_DIR` (по умолчанию `/home/hermes/projects`) в контейнер как `/home/hermes/projects` — встроенные файловые инструменты Hermes работают с этой директорией.
 - Поддерживает Telegram gateway для повседневного доступа, если в `config/gateways.toml` включить `[telegram] enabled = true`.
+- Поддерживает стабильный доступ к Google Drive/Docs из Telegram через встроенный Google Workspace skill. Remote `google_drive` MCP можно подключать отдельно, но для Telegram он не основной путь, потому что у него отдельный OAuth.
 - Скрипты можно запускать повторно: они проверяют текущее состояние и пропускают уже выполненные шаги.
 
 ## Быстрый старт на новом VPS
@@ -73,6 +74,7 @@ docker logs --tail=100 hermes               # посмотреть послед�
 ./scripts/setup-hermes.sh                   # синхронизировать config/image/container
 ./scripts/setup-mcp.sh                      # синхронизировать включённые MCP
 ./scripts/setup-gateway.sh                  # включить или выключить Telegram gateway
+./scripts/stabilize-google-workspace.sh     # закрепить Google Drive/Docs для Telegram после CLI OAuth
 ./scripts/update.sh                         # git pull + пере-синк всего (hermes/mcp/gateway) + обновить MCP-пакеты
 ```
 
@@ -91,7 +93,7 @@ hermes, MCP и gateway, и обновляет npm-пакеты включённ�
 - [`docs/01-server-setup.md`](docs/01-server-setup.md) — ручные шаги вокруг подготовки VPS: provisioning, DNS, backups.
 - [`docs/02-hermes-setup.md`](docs/02-hermes-setup.md) — как заполнить `.env`, запустить Hermes и открыть чат.
 - [`docs/mcp/README.md`](docs/mcp/README.md) — как подключать MCP-интеграции вручную через агента, + файл на каждый сервер.
-- [`docs/gateways/telegram.md`](docs/gateways/telegram.md) — настройка Telegram bot, user ID и privacy mode.
+- [`docs/gateways/telegram.md`](docs/gateways/telegram.md) — настройка Telegram bot, user ID, privacy mode и стабильный Google Drive/Docs через Workspace skill.
 - [`docs/superpowers/specs/2026-05-30-hermes-setup-design.md`](docs/superpowers/specs/2026-05-30-hermes-setup-design.md) — исходный design rationale.
 
 ## Тесты

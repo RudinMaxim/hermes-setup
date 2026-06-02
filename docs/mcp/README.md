@@ -71,6 +71,6 @@ docker exec hermes npm install -g @modelcontextprotocol/server-github
 
 ## Доступные инструкции
 
-- [`google_drive.md`](google_drive.md) — Google Drive (OAuth, подключается вручную через агента).
+- [`google_drive.md`](google_drive.md) — Google Drive/Docs. Для Telegram используй встроенный Google Workspace skill + `./scripts/stabilize-google-workspace.sh`; remote `google_drive` MCP описан отдельно и требует свой OAuth.
 - [`playwright.md`](playwright.md) — браузерная автоматизация.
 - [`docker_mcp.md`](docker_mcp.md) — инспекция Docker на хосте.
