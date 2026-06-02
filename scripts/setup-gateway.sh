@@ -52,10 +52,32 @@ gateway_enabled() {
   toml_get_bool "$GW_TOML" "$1" enabled
 }
 
-# True when the hermes container command is the gateway runner.
-telegram_gateway_active() {
-  docker inspect -f '{{join .Config.Cmd " "}}' hermes 2>/dev/null \
-    | grep -q 'gateway run'
+# Prints the container command without the image entrypoint. With this image the
+# entrypoint is already `hermes`, so the correct compose command is exactly
+# `gateway run`. The old `hermes gateway run` value expands to
+# `hermes hermes gateway run` and must be treated as broken.
+gateway_command() {
+  docker inspect -f '{{join .Config.Cmd " "}}' hermes 2>/dev/null || true
+}
+
+telegram_gateway_command_current() {
+  [[ "$(gateway_command)" == "gateway run" ]]
+}
+
+telegram_gateway_command_legacy() {
+  [[ "$(gateway_command)" == "hermes gateway run" ]]
+}
+
+telegram_gateway_healthy() {
+  docker_container_running hermes \
+    && docker exec hermes hermes gateway status >/dev/null 2>&1
+}
+
+ensure_google_workspace_token_link() {
+  if docker exec hermes sh -lc 'test -f /opt/data/google_token.json' >/dev/null 2>&1; then
+    docker exec -u root hermes sh -lc 'mkdir -p /home/hermes/.hermes && ln -sf /opt/data/google_token.json /home/hermes/.hermes/google_token.json && chown -h hermes:hermes /home/hermes/.hermes/google_token.json' >/dev/null
+    log_skip "google workspace token link is ready (/home/hermes/.hermes/google_token.json -> /opt/data/google_token.json)"
+  fi
 }
 
 # Interactive fill: if a required Telegram value is missing and we have a TTY,
@@ -119,7 +141,21 @@ wait_for_gateway() {
 }
 
 ensure_telegram() {
-  if telegram_gateway_active; then
+  if telegram_gateway_command_legacy; then
+    log_warn "legacy gateway command detected (hermes gateway run); recreating container"
+    maybe_prompt_telegram
+    validate_telegram
+    log_act "restarting telegram gateway (recreating container with gateway command)"
+    load_compose_env
+    docker compose -f "$CONFIG_DIR/docker-compose.yml" \
+                   -f "$CONFIG_DIR/docker-compose.gateway.yml" up -d --force-recreate >/dev/null
+    wait_for_gateway
+    ensure_google_workspace_token_link
+    log_ok "telegram gateway restarted"
+    return 0
+  fi
+
+  if telegram_gateway_command_current; then
     if [[ "$RESTART_GATEWAY" == "1" ]]; then
       maybe_prompt_telegram
       validate_telegram
@@ -128,9 +164,40 @@ ensure_telegram() {
       docker compose -f "$CONFIG_DIR/docker-compose.yml" \
                      -f "$CONFIG_DIR/docker-compose.gateway.yml" up -d --force-recreate >/dev/null
       wait_for_gateway
+      ensure_google_workspace_token_link
       log_ok "telegram gateway restarted"
       return 0
     fi
+
+    if ! docker_container_running hermes; then
+      log_warn "telegram gateway command is configured but container is not running; recreating container"
+      maybe_prompt_telegram
+      validate_telegram
+      log_act "restarting telegram gateway (recreating container with gateway command)"
+      load_compose_env
+      docker compose -f "$CONFIG_DIR/docker-compose.yml" \
+                     -f "$CONFIG_DIR/docker-compose.gateway.yml" up -d --force-recreate >/dev/null
+      wait_for_gateway
+      ensure_google_workspace_token_link
+      log_ok "telegram gateway restarted"
+      return 0
+    fi
+
+    if ! telegram_gateway_healthy; then
+      log_warn "telegram gateway command is configured but gateway status failed; recreating container"
+      maybe_prompt_telegram
+      validate_telegram
+      log_act "restarting telegram gateway (recreating container with gateway command)"
+      load_compose_env
+      docker compose -f "$CONFIG_DIR/docker-compose.yml" \
+                     -f "$CONFIG_DIR/docker-compose.gateway.yml" up -d --force-recreate >/dev/null
+      wait_for_gateway
+      ensure_google_workspace_token_link
+      log_ok "telegram gateway restarted"
+      return 0
+    fi
+
+    ensure_google_workspace_token_link
     log_skip "telegram gateway already running (command = gateway run)"
     return 0
   fi
@@ -141,11 +208,12 @@ ensure_telegram() {
   docker compose -f "$CONFIG_DIR/docker-compose.yml" \
                  -f "$CONFIG_DIR/docker-compose.gateway.yml" up -d >/dev/null
   wait_for_gateway
+  ensure_google_workspace_token_link
   log_ok "telegram gateway is up — message your bot to test"
 }
 
 ensure_telegram_off() {
-  if ! telegram_gateway_active; then
+  if ! telegram_gateway_command_current && ! telegram_gateway_command_legacy; then
     log_skip "telegram gateway not running"
     return 0
   fi

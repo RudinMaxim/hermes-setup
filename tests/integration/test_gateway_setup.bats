@@ -5,24 +5,28 @@ load '../helpers/assertions'
 
 STUB=/tmp/gw-bin-stub
 STATE=/tmp/.gw-stub-cmd
+STATUS=/tmp/.gw-stub-status
 
 setup() {
   id hermes &>/dev/null || useradd -m -s /bin/bash hermes
   mkdir -p "$STUB"
-  rm -f "$STATE"
+  rm -f "$STATE" "$STATUS" /tmp/.gw-status-checks
 
   # docker stub: models PID-1 command via $STATE, reports container running.
   cat >"$STUB/docker" <<'DOCKER'
 #!/usr/bin/env bash
 STATE=/tmp/.gw-stub-cmd
+STATUS=/tmp/.gw-stub-status
 case "$*" in
   "ps -a --format {{.Names}}") echo hermes ;;
-  "inspect -f "*"State.Status"*)  echo running ;;
+  "inspect -f "*"State.Status"*)  [[ -f "$STATUS" ]] && cat "$STATUS" || echo running ;;
   "inspect -f "*"Config.Cmd"*)    [[ -f "$STATE" ]] && cat "$STATE" || echo hermes ;;
-  *"docker-compose.gateway.yml up -d --force-recreate"*) echo "gateway run" >"$STATE"; printf '%s\n' "${HERMES_IMAGE:-}" > /tmp/.gw-image; echo restarted ;;
-  *"docker-compose.gateway.yml up -d"*) echo "gateway run" >"$STATE"; printf '%s\n' "${HERMES_IMAGE:-}" > /tmp/.gw-image; echo up ;;
-  *"up -d --force-recreate"*)     echo "hermes" >"$STATE"; printf '%s\n' "${HERMES_IMAGE:-}" > /tmp/.gw-image; echo recreated ;;
+  *"docker-compose.gateway.yml up -d --force-recreate"*) echo "gateway run" >"$STATE"; echo running >"$STATUS"; printf '%s\n' "${HERMES_IMAGE:-}" > /tmp/.gw-image; echo restarted ;;
+  *"docker-compose.gateway.yml up -d"*) echo "gateway run" >"$STATE"; echo running >"$STATUS"; printf '%s\n' "${HERMES_IMAGE:-}" > /tmp/.gw-image; echo up ;;
+  *"up -d --force-recreate"*)     echo "hermes" >"$STATE"; echo running >"$STATUS"; printf '%s\n' "${HERMES_IMAGE:-}" > /tmp/.gw-image; echo recreated ;;
   "exec hermes hermes gateway status"*) echo status >> /tmp/.gw-status-checks; exit 0 ;;
+  "exec hermes sh -lc test -f /opt/data/google_token.json"*) [[ "${GOOGLE_TOKEN_PRESENT:-0}" = "1" ]] && exit 0 || exit 1 ;;
+  "exec -u root hermes sh -lc mkdir -p /home/hermes/.hermes && ln -sf /opt/data/google_token.json /home/hermes/.hermes/google_token.json && chown -h hermes:hermes /home/hermes/.hermes/google_token.json"*) echo "$*" > /tmp/.gw-token-link; exit 0 ;;
   *) echo "stub: $*" ;;
 esac
 DOCKER
@@ -45,7 +49,7 @@ CURL
 }
 
 teardown() {
-  rm -rf "$STUB" "$STATE" /tmp/.gw-image
+  rm -rf "$STUB" "$STATE" "$STATUS" /tmp/.gw-image /tmp/.gw-status-checks /tmp/.gw-token-link
   rm -f "$REPO_ROOT/config/gateways.toml"
 }
 
@@ -94,15 +98,49 @@ enable_telegram() {
   [[ "$output" == *"telegram gateway already running"* ]]
 }
 
+@test "setup-gateway.sh recreates a legacy duplicated gateway command" {
+  enable_telegram
+  echo "hermes gateway run" > "$STATE"
+  run su hermes -c "PATH=$STUB:\$PATH HERMES_NONINTERACTIVE=1 bash '$SCRIPTS/setup-gateway.sh'"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"legacy gateway command"* ]]
+  [[ "$output" == *"telegram gateway restarted"* ]]
+  [ "$(cat "$STATE")" = "gateway run" ]
+}
+
+@test "setup-gateway.sh recreates an active gateway command when the container is stopped" {
+  enable_telegram
+  echo "gateway run" > "$STATE"
+  echo "exited" > "$STATUS"
+  run su hermes -c "PATH=$STUB:\$PATH HERMES_NONINTERACTIVE=1 bash '$SCRIPTS/setup-gateway.sh'"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"telegram gateway command is configured but container is not running"* ]]
+  [[ "$output" == *"telegram gateway restarted"* ]]
+  [ "$(cat "$STATE")" = "gateway run" ]
+  [ "$(cat "$STATUS")" = "running" ]
+}
+
+@test "setup-gateway.sh links the Workspace token path before reporting an active gateway" {
+  enable_telegram
+  echo "gateway run" > "$STATE"
+  run su hermes -c "PATH=$STUB:\$PATH HERMES_NONINTERACTIVE=1 GOOGLE_TOKEN_PRESENT=1 bash '$SCRIPTS/setup-gateway.sh'"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"google workspace token link is ready"* ]]
+  [[ "$output" == *"telegram gateway already running"* ]]
+  grep -q 'ln -sf /opt/data/google_token.json /home/hermes/.hermes/google_token.json' /tmp/.gw-token-link
+}
+
 @test "setup-gateway.sh --restart recreates an already active telegram gateway" {
   enable_telegram
   echo "gateway run" > "$STATE"
   rm -f /tmp/.gw-status-checks
-  run su hermes -c "PATH=$STUB:\$PATH HERMES_NONINTERACTIVE=1 bash '$SCRIPTS/setup-gateway.sh' --restart"
+  run su hermes -c "PATH=$STUB:\$PATH HERMES_NONINTERACTIVE=1 GOOGLE_TOKEN_PRESENT=1 bash '$SCRIPTS/setup-gateway.sh' --restart"
   [ "$status" -eq 0 ]
   [[ "$output" == *"restarting telegram gateway"* ]]
+  [[ "$output" == *"google workspace token link is ready"* ]]
   [[ "$output" == *"telegram gateway restarted"* ]]
   [ "$(cat "$STATE")" = "gateway run" ]
+  grep -q 'ln -sf /opt/data/google_token.json /home/hermes/.hermes/google_token.json' /tmp/.gw-token-link
   [ "$(wc -l < /tmp/.gw-status-checks)" -ge 3 ]
 }
 

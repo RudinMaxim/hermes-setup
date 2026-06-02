@@ -196,6 +196,78 @@ docker exec -it hermes hermes chat
 
 После успешного OAuth можно повторять запросы уже из Telegram.
 
+## 3.1. Если OAuth-prompt лагает или callback-порт уже закрылся
+В headless/SSH-окружении OAuth через remote MCP может быть неудобным: Hermes
+печатает ссылку, ждёт callback URL, терминал начинает лагать, а локальный
+callback-сервер `127.0.0.1:<port>` может закрыться до того, как ты вставишь URL.
+Симптом:
+
+```text
+curl ... 127.0.0.1:<port>/callback ... connection refused
+```
+
+В этом случае проще авторизовать встроенный Hermes Google Workspace skill. Это
+отдельный механизм от remote `google_drive` MCP, но он тоже даёт Hermes доступ к
+Google Drive/Docs/Sheets и сохраняет token в `/opt/data/google_token.json`.
+
+Запусти CLI-чат:
+
+```bash
+docker exec -it hermes hermes chat
+```
+
+Попроси Hermes выдать ссылку и не ждать ответа в том же turn:
+
+```text
+Давай авторизуемся в Google Drive/Workspace. Отправь мне ссылку следующим
+сообщением, я потом пришлю callback URL.
+```
+
+Hermes должен дать ссылку на Google OAuth. В ней redirect обычно выглядит как
+`http://localhost:1`. Это нормально: после входа браузер может показать ошибку
+подключения к `localhost:1`. Скопируй полный URL из адресной строки браузера,
+например:
+
+```text
+http://localhost:1/?state=...&code=...&scope=...
+```
+
+Вернись в CLI-чат Hermes и вставь callback URL целиком, одной строкой. Если
+терминал визуально переносит строку, это нормально; важно вставить весь URL без
+ручных разрывов.
+
+Успешный результат выглядит так:
+
+```text
+AUTHENTICATED: Token valid at /opt/data/google_token.json
+```
+
+После этого можно проверить доступ:
+
+```text
+Покажи последние 5 файлов из моего Google Drive.
+```
+
+Если после этого CLI-чат видит Drive, а Telegram-бот всё ещё отвечает, что
+Google не подключён, синхронизируй gateway:
+
+```bash
+./scripts/setup-gateway.sh
+```
+
+Скрипт создаст compatibility-ссылку
+`/home/hermes/.hermes/google_token.json -> /opt/data/google_token.json`, если
+токен уже есть. Это нужно потому, что CLI Workspace-авторизация сохраняет токен
+в `/opt/data/google_token.json`, а некоторые skill-проверки в gateway-контексте
+могут смотреть старый путь `~/.hermes/google_token.json`.
+
+Если вместе с авторизацией ты менял `config/.env` или `/opt/data/config.yaml`,
+пересоздай gateway:
+
+```bash
+./scripts/setup-gateway.sh --restart
+```
+
 ## 4. Проверка
 ```bash
 docker exec hermes hermes mcp test google_drive
@@ -232,8 +304,8 @@ docker exec -it hermes hermes chat
 Если CLI-чат показывает OAuth-ссылку — авторизация ещё не пройдена. Пройди её
 в CLI, затем повтори запрос в Telegram. Если CLI-чат работает, а Telegram всё
 ещё отказывает, проблема уже в Telegram gateway, а не в Google Drive MCP. См.
-[`../gateways/telegram.md`](../gateways/telegram.md), раздел про принудительный
-restart gateway.
+[`../gateways/telegram.md`](../gateways/telegram.md), разделы про Google
+Drive/Workspace из Telegram и принудительный restart gateway.
 
 ## Orphan containers warning
 Предупреждения вида:

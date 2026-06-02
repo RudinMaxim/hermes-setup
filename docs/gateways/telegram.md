@@ -43,8 +43,19 @@ enabled = true
 ./scripts/setup-gateway.sh
 ```
 The script validates the token (`getMe`), checks the allowlist is numeric, then
-recreates the container with `hermes gateway run` as PID 1. Message your bot to
-test. Re-running is safe — if nothing changed it only prints `[SKIP]`.
+recreates the container with the gateway command. The Hermes image already has
+`hermes` as its entrypoint, so the compose override must be:
+
+```yaml
+command: ["gateway", "run"]
+```
+
+Do not use `command: ["hermes", "gateway", "run"]`: that expands to
+`hermes hermes gateway run` and the container exits with
+`invalid choice: 'hermes'`.
+
+Message your bot to test. Re-running is safe — if nothing changed it only
+prints `[SKIP]`.
 
 If the gateway is already running and you changed `config/.env` or Hermes'
 `/opt/data/config.yaml`, force it to recreate the gateway container:
@@ -56,6 +67,55 @@ If the gateway is already running and you changed `config/.env` or Hermes'
 Without `--restart`, an already-running gateway prints `[SKIP]`: that only means
 the container command is already `gateway run`; it does not force a fresh config
 read.
+
+The setup script also checks broken gateway states. If it detects the old
+duplicated command (`hermes gateway run`), a stopped container, or a failed
+`hermes gateway status`, it recreates the gateway container instead of printing
+a misleading `[SKIP]`.
+
+## Google Drive / Workspace from Telegram
+
+If Google Drive works in `docker exec -it hermes hermes chat`, but the Telegram
+bot says that Google is not connected, the usual cause is token path mismatch.
+The CLI Google Workspace authorization stores the token here:
+
+```text
+/opt/data/google_token.json
+```
+
+Some Workspace skill checks still look at the older path:
+
+```text
+/home/hermes/.hermes/google_token.json
+```
+
+Run the gateway setup once after successful CLI authorization:
+
+```bash
+./scripts/setup-gateway.sh
+```
+
+If `/opt/data/google_token.json` exists, the script creates this compatibility
+symlink inside the container:
+
+```text
+/home/hermes/.hermes/google_token.json -> /opt/data/google_token.json
+```
+
+Then ask the bot again. If you also changed `config/.env` or
+`/opt/data/config.yaml`, use:
+
+```bash
+./scripts/setup-gateway.sh --restart
+```
+
+Manual checks:
+
+```bash
+docker exec hermes sh -lc 'echo HOME=$HOME; echo HERMES_HOME=$HERMES_HOME'
+docker exec hermes sh -lc 'ls -l /opt/data/google_token.json /home/hermes/.hermes/google_token.json'
+docker exec hermes hermes gateway status
+```
 
 To turn it off: set `enabled = false` and re-run — the container returns to
 idle/CLI mode.
