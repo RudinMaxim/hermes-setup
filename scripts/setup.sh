@@ -37,8 +37,21 @@ done
 
 confirm_yes() {
   local p="$1" a
+  if [[ "${HERMES_ASSUME_YES:-}" == 1 ]]; then
+    printf '%s [Y/n]: y\n' "$p"
+    return 0
+  fi
   read -r -p "$p [Y/n]: " a
   [[ ! "$a" =~ ^[Nn] ]]
+}
+
+confirm_optional() {
+  local p="$1"
+  if [[ "${HERMES_ASSUME_YES:-}" == 1 ]]; then
+    printf '%s [y/N]: y\n' "$p"
+    return 0
+  fi
+  confirm "$p"
 }
 
 set_toml_value() {
@@ -112,11 +125,12 @@ maybe_configure_google_drive() {
   [[ -f "$MCP_TOML" && -f "$ENVFILE" ]] || return 0
 
   if ! google_drive_enabled; then
-    if ! is_interactive; then
+    if ! is_interactive && [[ "${HERMES_ASSUME_YES:-}" != 1 ]]; then
       return 0
     fi
-    if confirm "Configure Google Drive MCP now?"; then
+    if confirm_optional "Configure Google Drive MCP now?"; then
       set_toml_value "$MCP_TOML" google_drive enabled true
+      google_drive_enabled || die "could not enable mcp.google_drive in config/mcp.toml"
       log_ok "mcp.google_drive enabled in config/mcp.toml"
     else
       return 0
