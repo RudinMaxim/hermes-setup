@@ -140,6 +140,10 @@ STUB
   grep -q 'useradd -m -s /bin/bash hermes' "$REPO_ROOT/docker/Dockerfile.hermes"
 }
 
+@test "fallback Dockerfile installs xz for Hermes Node tarballs" {
+  grep -q 'xz-utils' "$REPO_ROOT/docker/Dockerfile.hermes"
+}
+
 @test "setup-hermes.sh lets config override the fallback base image" {
   cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
   sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"

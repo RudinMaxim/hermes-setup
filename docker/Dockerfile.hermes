@@ -11,7 +11,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl git python3 python3-pip python3-venv \
-      ripgrep ffmpeg sudo passwd \
+      ripgrep ffmpeg sudo passwd xz-utils \
  && rm -rf /var/lib/apt/lists/* \
  && useradd -m -s /bin/bash hermes
 
