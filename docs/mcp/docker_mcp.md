@@ -3,16 +3,16 @@
 Inspect host containers and read logs.
 
 ## Risk
-This MCP mounts `/var/run/docker.sock` into the hermes container. Anyone who can talk to the Docker daemon can effectively become root on the host. The script refuses to enable this MCP unless you explicitly acknowledge.
+This MCP mounts `/var/run/docker.sock` into the hermes container. Anyone who can talk to the Docker daemon can effectively become root on the host.
+
+**Включён из коробки** (`enabled = true`, `acknowledge_socket_risk = true` в
+`config/mcp.toml`), **но остаётся неактивным**, пока ты вручную не смонтируешь
+socket в контейнер — это последний осознанный шаг (см. ниже). Если этот риск
+не нужен, поставь `enabled = false` и `acknowledge_socket_risk = false`.
 
 ## What you need to do by hand
-1. Read the risk section above. Understand that enabling this gives the agent (and anyone who can prompt-inject it) root-equivalent access to the VPS.
-2. In `config/mcp.toml`:
-   ```toml
-   [docker_mcp]
-   enabled = true
-   acknowledge_socket_risk = true
-   ```
+1. Read the risk section above. Understand that mounting the socket gives the agent (and anyone who can prompt-inject it) root-equivalent access to the VPS.
+2. Add the socket mount (see below) and recreate the container.
 3. Run: `./scripts/setup-mcp.sh`
 
 ## What the script does

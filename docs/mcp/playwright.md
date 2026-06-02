@@ -2,13 +2,8 @@
 
 Headless browser automation. Runs as a separate Docker container (the image is ~1 GB).
 
-## What you need to do by hand
-1. In `config/mcp.toml`:
-   ```toml
-   [playwright]
-   enabled = true
-   ```
-2. Run: `./scripts/setup-mcp.sh`
+**Работает из коробки.** В `config/mcp.toml` секция `[playwright]` включена по
+умолчанию, и `setup-mcp.sh` (часть `./setup.sh`) поднимает её автоматически.
 
 ## What the script does
 - Pulls `mcr.microsoft.com/playwright/mcp:latest` and starts `mcp-playwright` on the `hermes_net` Docker network.

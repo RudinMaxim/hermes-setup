@@ -246,8 +246,8 @@ join_csv() {
 
 write_hermes_mcp_config() {
   # oauth_client_id / oauth_client_secret are the literal credential VALUES (not
-  # env-var names): Hermes does not expand ${VARS} in the oauth block, and
-  # Google's Drive MCP requires real client credentials in config.yaml.
+  # env-var names): Hermes does not expand ${VARS} in the oauth block, so an
+  # OAuth MCP needs its real client credentials written into config.yaml.
   local mcp="$1" transport="$2" command="$3" url="$4" env_csv="$5" auth="$6" oauth_client_id="$7" oauth_client_secret="$8" scopes_csv="$9"
   shift 9
   docker exec -i hermes python3 - "$mcp" "$transport" "$command" "$url" "$env_csv" "$auth" "$oauth_client_id" "$oauth_client_secret" "$scopes_csv" "$@" <<'PY'
@@ -368,11 +368,6 @@ deploy_stdio_mcp() {
     env_names+=("$req")
   done < <(toml_get_array "$TOML" "$mcp" requires)
   cmd_args=(-y "$pkg")
-  if [[ "$mcp" == "filesystem" ]]; then
-    local mount
-    mount=$(toml_get "$TOML" "$mcp" mount) || die "mcp.$mcp: missing 'mount'"
-    cmd_args+=("$mount")
-  fi
   env_csv=$(join_csv "${env_names[@]}")
   set +e
   write_hermes_mcp_config "$mcp" stdio npx "" "$env_csv" "" "" "" "" "${cmd_args[@]}"
@@ -473,11 +468,7 @@ main() {
     esac
 
     if [[ "$(toml_get "$TOML" "$mcp" auth 2>/dev/null || true)" == "oauth" ]]; then
-      if [[ "$mcp" == "google_drive" ]]; then
-        log_warn "mcp.$mcp: OAuth required — run ./setup.sh or ask Hermes chat to use Google Drive MCP; direct MCP login may not produce a Google auth URL"
-      else
-        log_warn "mcp.$mcp: OAuth login required — run: docker exec -it hermes hermes mcp login $mcp"
-      fi
+      log_warn "mcp.$mcp: OAuth login required — run: docker exec -it hermes hermes mcp login $mcp"
       continue
     fi
 

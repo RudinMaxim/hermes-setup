@@ -6,8 +6,8 @@
 
 - Подготавливает Debian/Ubuntu VPS: отдельный пользователь `hermes`, вход по SSH-ключу, UFW, fail2ban, unattended-upgrades.
 - Запускает Hermes Agent в Docker-контейнере: `docker exec -it hermes hermes chat`.
-- Позволяет включать MCP-серверы через `config/mcp.toml`: Filesystem, GitHub, Context7, Memory, Playwright, Google Drive, Postgres, Docker.
-- Монтирует директорию для Filesystem MCP через `HERMES_PROJECTS_DIR` (по умолчанию `/home/hermes/projects`) в контейнер как `/home/hermes/projects`.
+- Включает MCP-серверы через `config/mcp.toml`: Playwright и Docker (оба включены по умолчанию). Остальные MCP добавляются вручную.
+- Монтирует `HERMES_PROJECTS_DIR` (по умолчанию `/home/hermes/projects`) в контейнер как `/home/hermes/projects` — встроенные файловые инструменты Hermes работают с этой директорией.
 - Поддерживает Telegram gateway для повседневного доступа, если в `config/gateways.toml` включить `[telegram] enabled = true`.
 - Скрипты можно запускать повторно: они проверяют текущее состояние и пропускают уже выполненные шаги.
 
@@ -38,10 +38,7 @@ nano config/.env          # укажи OPENROUTER_API_KEY=..., OPENAI_API_KEY=..
 #   HERMES_MODEL_PROVIDER=openrouter
 #   HERMES_MODEL=openai/gpt-5.4-mini
 # Для этого укажи OPENROUTER_API_KEY=...
-# Опционально: поменяй HERMES_PROJECTS_DIR, если Filesystem MCP должен открыть другую host-директорию.
-# Если нужен Google Drive MCP, можно заранее добавить:
-#   GOOGLE_DRIVE_OAUTH_CLIENT_ID=...
-#   GOOGLE_DRIVE_OAUTH_CLIENT_SECRET=...
+# Опционально: поменяй HERMES_PROJECTS_DIR, если в контейнер нужно смонтировать другую host-директорию.
 ./setup.sh
 ```
 
@@ -58,16 +55,15 @@ cd ~/hermes-setup && ./setup.sh
 ```
 
 В интерактивном терминале он спросит недостающий LLM-ключ, запустит Hermes,
-предложит включить Google Drive MCP, спросит OAuth client id/secret, синхронизирует
-MCP, проведёт OAuth login через ссылку + callback URL, а затем синхронизирует
-gateway. Для scripted-запуска используй `--non-interactive` и заранее заполни
-`config/.env`.
+синхронизирует MCP, а затем синхронизирует gateway. Для scripted-запуска используй
+`--non-interactive` и заранее заполни `config/.env`.
 
 ## MCP
 
+- Из коробки включены два MCP: **Playwright** (браузерная автоматизация) и **Docker** (инспекция контейнеров хоста). Их поднимает `setup-mcp.sh`.
 - `setup-mcp.sh` управляет только MCP, которые перечислены в `config/mcp.toml`. MCP-серверы, добавленные в Hermes вручную, не удаляются.
-- Для Filesystem MCP оставь `mount = "/home/hermes/projects"` в `config/mcp.toml`. Host-директория настраивается через `HERMES_PROJECTS_DIR` в `config/.env`.
-- Docker MCP опасен: mount `/var/run/docker.sock` даёт root-equivalent доступ к хосту. Скрипт требует `acknowledge_socket_risk = true` и проверяет, что socket уже смонтирован в контейнер. Подробности: [`docs/mcp/docker_mcp.md`](docs/mcp/docker_mcp.md).
+- Остальные интеграции подключаются вручную — проще всего через сам агент Hermes. Общий гайд и примеры: [`docs/mcp/README.md`](docs/mcp/README.md), отдельно [Google Drive](docs/mcp/google_drive.md).
+- Docker MCP опасен: mount `/var/run/docker.sock` даёт root-equivalent доступ к хосту. По умолчанию `acknowledge_socket_risk = true`, но MCP остаётся неактивным, пока socket не смонтирован в контейнер. Подробности: [`docs/mcp/docker_mcp.md`](docs/mcp/docker_mcp.md).
 
 ## Частые команды
 
@@ -94,7 +90,7 @@ hermes, MCP и gateway, и обновляет npm-пакеты включённ�
 
 - [`docs/01-server-setup.md`](docs/01-server-setup.md) — ручные шаги вокруг подготовки VPS: provisioning, DNS, backups.
 - [`docs/02-hermes-setup.md`](docs/02-hermes-setup.md) — как заполнить `.env`, запустить Hermes и открыть чат.
-- [`docs/mcp/`](docs/mcp/) — отдельный файл на каждый MCP-сервер.
+- [`docs/mcp/README.md`](docs/mcp/README.md) — как подключать MCP-интеграции вручную через агента, + файл на каждый сервер.
 - [`docs/gateways/telegram.md`](docs/gateways/telegram.md) — настройка Telegram bot, user ID и privacy mode.
 - [`docs/superpowers/specs/2026-05-30-hermes-setup-design.md`](docs/superpowers/specs/2026-05-30-hermes-setup-design.md) — исходный design rationale.
 
