@@ -106,10 +106,16 @@ ensure_llm_key() {
 
 run_fallback_build() {
   local fallback_base_image="$1"
-  local build_log
+  local build_log rc
   build_log=$(mktemp)
 
-  if docker build --build-arg "BASE_IMAGE=$fallback_base_image" -t "$LOCAL_IMAGE" -f "$REPO_ROOT/docker/Dockerfile.hermes" "$REPO_ROOT" >"$build_log" 2>&1; then
+  set +e
+  docker build --build-arg "BASE_IMAGE=$fallback_base_image" -t "$LOCAL_IMAGE" -f "$REPO_ROOT/docker/Dockerfile.hermes" "$REPO_ROOT" 2>&1 \
+    | tee "$build_log"
+  rc=${PIPESTATUS[0]}
+  set -e
+
+  if (( rc == 0 )); then
     rm -f "$build_log"
     return 0
   fi

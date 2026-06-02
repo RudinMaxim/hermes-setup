@@ -22,4 +22,4 @@ RUN curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/
     | bash
 
 ENTRYPOINT ["hermes"]
-CMD ["gateway", "start"]
+CMD ["gateway", "run"]

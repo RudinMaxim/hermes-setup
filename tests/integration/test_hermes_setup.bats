@@ -144,6 +144,10 @@ STUB
   grep -q 'xz-utils' "$REPO_ROOT/docker/Dockerfile.hermes"
 }
 
+@test "fallback Dockerfile runs the gateway in foreground" {
+  grep -q 'CMD \["gateway", "run"\]' "$REPO_ROOT/docker/Dockerfile.hermes"
+}
+
 @test "setup-hermes.sh lets config override the fallback base image" {
   cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
   sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"
@@ -167,6 +171,34 @@ STUB
   grep -q -- '--build-arg BASE_IMAGE=ubuntu:24.04' /tmp/.hermes-build-args
 
   rm -rf /tmp/bin-stub /tmp/.hermes-build-args
+}
+
+@test "setup-hermes.sh streams fallback build output" {
+  cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
+  sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"
+
+  mkdir -p /tmp/bin-stub
+  cat >/tmp/bin-stub/docker <<'STUB'
+#!/usr/bin/env bash
+case "$1" in
+  info) exit 0 ;;
+  image) exit 1 ;;
+  pull) exit 1 ;;
+  build)
+    echo "build-progress-marker"
+    exit 1
+    ;;
+  *) echo "stub: $*" ;;
+esac
+STUB
+  chmod +x /tmp/bin-stub/docker
+
+  run su hermes -c "PATH=/tmp/bin-stub:$PATH HERMES_NO_COMPOSE=1 bash '$SCRIPTS/setup-hermes.sh'"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"build-progress-marker"* ]]
+  [[ "$output" == *"fallback docker build failed"* ]]
+
+  rm -rf /tmp/bin-stub
 }
 
 @test "setup-hermes.sh explains Docker Hub rate limits during fallback build" {
