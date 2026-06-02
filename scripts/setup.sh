@@ -179,17 +179,26 @@ google_drive_oauth_login() {
   log_warn "When Hermes prints an authorization URL, open it in your browser."
   log_warn "After Google redirects to 127.0.0.1, paste the full callback URL here."
 
-  coproc GDRIVE_OAUTH { docker exec -i hermes hermes mcp login google_drive 2>&1; }
-  local out_fd="${GDRIVE_OAUTH[0]}" in_fd="${GDRIVE_OAUTH[1]}" pid="$GDRIVE_OAUTH_PID"
-  local line ready_for_callback=0 i callback rc
+  local fifo log_file line ready_for_callback=0 i callback rc pid fifo_fd printed_lines=0 total_lines
+  fifo=$(mktemp -u)
+  log_file=$(mktemp)
+  mkfifo "$fifo"
+  exec {fifo_fd}<>"$fifo"
+
+  docker exec -i hermes hermes mcp login google_drive <"$fifo" >"$log_file" 2>&1 &
+  pid=$!
 
   for i in $(seq 1 60); do
-    while IFS= read -r -t 0.2 line <&"$out_fd"; do
-      printf '%s\n' "$line"
+    while IFS= read -r line; do
       if [[ "$line" =~ https?://|callback|redirect|Redirect|Paste|Enter ]]; then
         ready_for_callback=1
       fi
-    done
+    done <"$log_file"
+    total_lines=$(wc -l <"$log_file" 2>/dev/null || printf '0')
+    if (( total_lines > printed_lines )); then
+      sed -n "$((printed_lines + 1)),${total_lines}p" "$log_file"
+      printed_lines="$total_lines"
+    fi
     if ! kill -0 "$pid" 2>/dev/null; then
       break
     fi
@@ -202,13 +211,13 @@ google_drive_oauth_login() {
     wait "$pid"
     rc=$?
     set -e
-    if (( rc == 0 )); then
-      log_ok "mcp.google_drive: OAuth login completed"
+    exec {fifo_fd}>&-
+    rm -f "$fifo" "$log_file"
+    if (( rc == 0 && ready_for_callback )); then
+      log_ok "mcp.google_drive: OAuth login completed before callback input"
     else
       log_warn "mcp.google_drive: OAuth login exited before callback input (rc=$rc)"
     fi
-    eval "exec ${out_fd}<&-"
-    eval "exec ${in_fd}>&-"
     return 0
   fi
 
@@ -220,23 +229,25 @@ google_drive_oauth_login() {
   if [[ -z "$callback" ]]; then
     kill "$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
-    eval "exec ${out_fd}<&-"
-    eval "exec ${in_fd}>&-"
+    exec {fifo_fd}>&-
+    rm -f "$fifo" "$log_file"
     log_warn "mcp.google_drive: OAuth login skipped"
     return 0
   fi
 
-  printf '%s\n' "$callback" >&"$in_fd"
-  eval "exec ${in_fd}>&-"
+  printf '%s\n' "$callback" >&"$fifo_fd"
+  exec {fifo_fd}>&-
+  rm -f "$fifo"
 
   set +e
-  while IFS= read -r -t 1 line <&"$out_fd"; do
-    printf '%s\n' "$line"
-  done
   wait "$pid"
   rc=$?
   set -e
-  eval "exec ${out_fd}<&-"
+  total_lines=$(wc -l <"$log_file" 2>/dev/null || printf '0')
+  if (( total_lines > printed_lines )); then
+    sed -n "$((printed_lines + 1)),${total_lines}p" "$log_file"
+  fi
+  rm -f "$log_file"
 
   case "$rc" in
     0)
