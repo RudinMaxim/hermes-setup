@@ -18,6 +18,7 @@ STATE=/tmp/.gw-stub-cmd
 case "$*" in
   "inspect -f "*"State.Status"*)  echo running ;;
   "inspect -f "*"Config.Cmd"*)    [[ -f "$STATE" ]] && cat "$STATE" || echo hermes ;;
+  *"docker-compose.gateway.yml up -d --force-recreate"*) echo "hermes gateway run" >"$STATE"; printf '%s\n' "${HERMES_IMAGE:-}" > /tmp/.gw-image; echo restarted ;;
   *"docker-compose.gateway.yml up -d"*) echo "hermes gateway run" >"$STATE"; printf '%s\n' "${HERMES_IMAGE:-}" > /tmp/.gw-image; echo up ;;
   *"up -d --force-recreate"*)     echo "hermes" >"$STATE"; printf '%s\n' "${HERMES_IMAGE:-}" > /tmp/.gw-image; echo recreated ;;
   "exec hermes hermes gateway status"*) exit 0 ;;
@@ -90,6 +91,16 @@ enable_telegram() {
   run su hermes -c "PATH=$STUB:\$PATH HERMES_NONINTERACTIVE=1 GETME_RESPONSE='{\"ok\":false}' bash '$SCRIPTS/setup-gateway.sh'"
   [ "$status" -eq 0 ]
   [[ "$output" == *"telegram gateway already running"* ]]
+}
+
+@test "setup-gateway.sh --restart recreates an already active telegram gateway" {
+  enable_telegram
+  echo "hermes gateway run" > "$STATE"
+  run su hermes -c "PATH=$STUB:\$PATH HERMES_NONINTERACTIVE=1 bash '$SCRIPTS/setup-gateway.sh' --restart"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"restarting telegram gateway"* ]]
+  [[ "$output" == *"telegram gateway restarted"* ]]
+  grep -q 'gateway run' "$STATE"
 }
 
 @test "setup-gateway.sh reuses persisted HERMES_IMAGE when recreating the container" {

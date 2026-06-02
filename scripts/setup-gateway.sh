@@ -10,6 +10,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG_DIR="$REPO_ROOT/config"
 GW_TOML="$CONFIG_DIR/gateways.toml"
 ENVFILE="$CONFIG_DIR/.env"
+RESTART_GATEWAY=0
 
 # shellcheck source=lib/log.sh
 source "$SCRIPT_DIR/lib/log.sh"
@@ -25,6 +26,7 @@ source "$SCRIPT_DIR/lib/prompt.sh"
 for arg in "$@"; do
   case "$arg" in
     --non-interactive) export HERMES_NONINTERACTIVE=1 ;;
+    --restart) RESTART_GATEWAY=1 ;;
     *) die "unknown argument: $arg" ;;
   esac
 done
@@ -111,6 +113,17 @@ wait_for_gateway() {
 
 ensure_telegram() {
   if telegram_gateway_active; then
+    if [[ "$RESTART_GATEWAY" == "1" ]]; then
+      maybe_prompt_telegram
+      validate_telegram
+      log_act "restarting telegram gateway (recreating container with gateway command)"
+      load_compose_env
+      docker compose -f "$CONFIG_DIR/docker-compose.yml" \
+                     -f "$CONFIG_DIR/docker-compose.gateway.yml" up -d --force-recreate >/dev/null
+      wait_for_gateway
+      log_ok "telegram gateway restarted"
+      return 0
+    fi
     log_skip "telegram gateway already running (PID1 = hermes gateway run)"
     return 0
   fi

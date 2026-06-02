@@ -46,8 +46,39 @@ The script validates the token (`getMe`), checks the allowlist is numeric, then
 recreates the container with `hermes gateway run` as PID 1. Message your bot to
 test. Re-running is safe — if nothing changed it only prints `[SKIP]`.
 
+If the gateway is already running and you changed `config/.env` or Hermes'
+`/opt/data/config.yaml`, force it to recreate the gateway container:
+
+```bash
+./scripts/setup-gateway.sh --restart
+```
+
 To turn it off: set `enabled = false` and re-run — the container returns to
 idle/CLI mode.
+
+## Home channel prompt
+
+After the Telegram gateway starts, Hermes may send this message:
+
+```text
+No home channel is set for Telegram. A home channel is where Hermes delivers cron job results and cross-platform messages.
+
+Type /sethome to make this chat your home channel, or ignore to skip.
+```
+
+This is not an auth error and it is not related to MCP. Hermes is asking which
+Telegram chat should receive background messages: cron results, scheduled jobs,
+and messages produced outside the current chat.
+
+If this private chat with the bot is where you want those messages, send:
+
+```text
+/sethome
+```
+
+If you use a group chat, send `/sethome` in that group instead. If you do not
+care about background delivery, you can ignore the prompt, but Hermes may remind
+you again.
 
 ## Privacy mode in groups (manual)
 

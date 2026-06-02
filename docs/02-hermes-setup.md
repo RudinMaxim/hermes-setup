@@ -81,8 +81,10 @@ Quick checks inside the chat:
 Hermes keeps `SOUL.md` in its data directory (`$HERMES_HOME`, e.g. `/opt/data`
 on the current image) as its personality. To edit:
 ```bash
-docker exec -it hermes bash -lc 'nano "$HERMES_HOME/SOUL.md"'
-docker exec hermes hermes config reload
+docker cp hermes:/opt/data/SOUL.md ./SOUL.hermes.md
+# edit ./SOUL.hermes.md on the host
+docker cp ./SOUL.hermes.md hermes:/opt/data/SOUL.md
+docker restart hermes
 ```
 
 ## Optional: messaging gateways
