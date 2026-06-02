@@ -31,7 +31,8 @@ done
 
 DEFAULT_IMAGE="nousresearch/hermes-agent:latest"
 LOCAL_IMAGE="hermes-agent:local"
-DEFAULT_FALLBACK_BASE_IMAGE="public.ecr.aws/docker/library/ubuntu:26.04"
+OLD_FALLBACK_BASE_IMAGE="public.ecr.aws/docker/library/ubuntu:26.04"
+DEFAULT_FALLBACK_BASE_IMAGE="public.ecr.aws/docker/library/ubuntu:24.04"
 DEFAULT_MODEL_PROVIDER="openrouter"
 DEFAULT_MODEL="openai/gpt-5.4-mini"
 HERMES_IMAGE=""
@@ -77,6 +78,16 @@ ensure_configs() {
     log_ok "gateways.toml created"
   else
     log_skip "gateways.toml already exists"
+  fi
+}
+
+migrate_fallback_base_image() {
+  local current
+  current=$(read_env_value "$ENVFILE" HERMES_FALLBACK_BASE_IMAGE 2>/dev/null || true)
+  if [[ "$current" == "$OLD_FALLBACK_BASE_IMAGE" ]]; then
+    log_act "switching fallback base image from Ubuntu 26.04 to Ubuntu 24.04"
+    set_env_value "$ENVFILE" HERMES_FALLBACK_BASE_IMAGE "$DEFAULT_FALLBACK_BASE_IMAGE" >/dev/null || true
+    log_ok "HERMES_FALLBACK_BASE_IMAGE set to $DEFAULT_FALLBACK_BASE_IMAGE"
   fi
 }
 
@@ -139,6 +150,12 @@ image_has_python_yaml() {
   docker run --rm --entrypoint python3 "$1" -c 'import yaml' >/dev/null 2>&1
 }
 
+image_is_unsupported_ubuntu_26() {
+  local version
+  version=$(docker run --rm --entrypoint sh "$1" -c '. /etc/os-release 2>/dev/null; printf "%s" "${VERSION_ID:-}"' 2>/dev/null || true)
+  [[ "$version" == "26.04" ]]
+}
+
 build_local_image() {
   local fallback_base_image
   fallback_base_image="${HERMES_FALLBACK_BASE_IMAGE:-$(read_env_value "$ENVFILE" HERMES_FALLBACK_BASE_IMAGE 2>/dev/null || printf '%s' "$DEFAULT_FALLBACK_BASE_IMAGE")}"
@@ -157,7 +174,10 @@ ensure_image() {
   fi
 
   if docker_image_present "$LOCAL_IMAGE"; then
-    if image_has_python_yaml "$LOCAL_IMAGE"; then
+    if image_is_unsupported_ubuntu_26 "$LOCAL_IMAGE"; then
+      log_warn "image $LOCAL_IMAGE is based on Ubuntu 26.04, which Playwright does not support — rebuilding local fallback"
+      build_local_image
+    elif image_has_python_yaml "$LOCAL_IMAGE"; then
       log_skip "image $LOCAL_IMAGE already present (local fallback)"
     else
       log_warn "image $LOCAL_IMAGE is missing PyYAML — rebuilding local fallback"
@@ -376,6 +396,7 @@ PY
 main() {
   require_non_root
   ensure_configs
+  migrate_fallback_base_image
   ensure_llm_key
   if (( CONFIGS_ONLY )); then
     log_ok "configs-only mode: stopping before docker steps"

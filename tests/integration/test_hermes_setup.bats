@@ -43,6 +43,17 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
+@test "setup-hermes.sh migrates old Ubuntu 26.04 fallback base image" {
+  cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
+  sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"
+  sed -i 's|^HERMES_FALLBACK_BASE_IMAGE=.*|HERMES_FALLBACK_BASE_IMAGE=public.ecr.aws/docker/library/ubuntu:26.04|' "$REPO_ROOT/config/.env"
+
+  run su hermes -c "bash '$SCRIPTS/setup-hermes.sh' --configs-only"
+  [ "$status" -eq 0 ]
+  grep -qx 'HERMES_FALLBACK_BASE_IMAGE=public.ecr.aws/docker/library/ubuntu:24.04' "$REPO_ROOT/config/.env"
+  [[ "$output" == *"switching fallback base image from Ubuntu 26.04 to Ubuntu 24.04"* ]]
+}
+
 @test "setup-hermes.sh creates the data volume and network" {
   cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
   sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"
@@ -110,7 +121,7 @@ STUB
   rm -rf /tmp/bin-stub
 }
 
-@test "setup-hermes.sh builds fallback image from the Ubuntu 26.04 Docker Hub mirror base" {
+@test "setup-hermes.sh builds fallback image from the Ubuntu 24.04 ECR mirror base" {
   cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
   sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"
 
@@ -129,7 +140,7 @@ STUB
 
   run su hermes -c "PATH=/tmp/bin-stub:$PATH HERMES_NO_COMPOSE=1 bash '$SCRIPTS/setup-hermes.sh'"
   [ "$status" -eq 0 ]
-  grep -q -- '--build-arg BASE_IMAGE=public.ecr.aws/docker/library/ubuntu:26.04' /tmp/.hermes-build-args
+  grep -q -- '--build-arg BASE_IMAGE=public.ecr.aws/docker/library/ubuntu:24.04' /tmp/.hermes-build-args
 
   rm -rf /tmp/bin-stub /tmp/.hermes-build-args
 }
@@ -205,6 +216,33 @@ STUB
   rm -rf /tmp/bin-stub /tmp/.hermes-local-rebuilt
 }
 
+@test "setup-hermes.sh rebuilds local fallback image based on unsupported Ubuntu 26.04" {
+  cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
+  sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"
+
+  mkdir -p /tmp/bin-stub
+  cat >/tmp/bin-stub/docker <<'STUB'
+#!/usr/bin/env bash
+case "$*" in
+  "info") exit 0 ;;
+  "image inspect nousresearch/hermes-agent:latest") exit 1 ;;
+  "image inspect hermes-agent:local") exit 0 ;;
+  "run --rm --entrypoint sh hermes-agent:local -c . /etc/os-release "*"VERSION_ID"*) echo "26.04"; exit 0 ;;
+  "build "*" -t hermes-agent:local "*) touch /tmp/.hermes-local-rebuilt-26; exit 0 ;;
+  *) echo "stub: $*" ;;
+esac
+STUB
+  chmod +x /tmp/bin-stub/docker
+  rm -f /tmp/.hermes-local-rebuilt-26
+
+  run su hermes -c "PATH=/tmp/bin-stub:$PATH HERMES_NO_COMPOSE=1 bash '$SCRIPTS/setup-hermes.sh'"
+  [ "$status" -eq 0 ]
+  [ -f /tmp/.hermes-local-rebuilt-26 ]
+  [[ "$output" == *"Ubuntu 26.04, which Playwright does not support"* ]]
+
+  rm -rf /tmp/bin-stub /tmp/.hermes-local-rebuilt-26
+}
+
 @test "setup-hermes.sh streams fallback build output" {
   cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
   sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"
@@ -261,7 +299,7 @@ STUB
   [ "$status" -ne 0 ]
   [[ "$output" == *"Docker Hub anonymous pull rate limit"* ]]
   [[ "$output" == *"current fallback base image: ubuntu:24.04"* ]]
-  [[ "$output" == *"HERMES_FALLBACK_BASE_IMAGE=public.ecr.aws/docker/library/ubuntu:26.04"* ]]
+  [[ "$output" == *"HERMES_FALLBACK_BASE_IMAGE=public.ecr.aws/docker/library/ubuntu:24.04"* ]]
 
   rm -rf /tmp/bin-stub
 }

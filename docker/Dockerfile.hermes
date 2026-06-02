@@ -2,7 +2,7 @@
 # Fallback image — used when `docker pull nousresearch/hermes-agent` fails.
 # Installs Hermes via the official curl script.
 
-ARG BASE_IMAGE=public.ecr.aws/docker/library/ubuntu:26.04
+ARG BASE_IMAGE=public.ecr.aws/docker/library/ubuntu:24.04
 FROM ${BASE_IMAGE}
 
 ENV DEBIAN_FRONTEND=noninteractive \

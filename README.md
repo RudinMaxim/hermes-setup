@@ -47,7 +47,7 @@ nano config/.env          # укажи OPENROUTER_API_KEY=..., OPENAI_API_KEY=..
 
 `setup-hermes.sh` сам создаёт `config/.env` из `config/.env.example`, если файла ещё нет. Если LLM-ключ не заполнен, скрипт остановится с понятным сообщением.
 
-Если pull образа `nousresearch/hermes-agent:latest` не удался, `setup-hermes.sh` соберёт локальный образ `hermes-agent:local` из `docker/Dockerfile.hermes` и запишет выбранный `HERMES_IMAGE` в `config/.env`. Fallback-сборка по умолчанию использует `public.ecr.aws/docker/library/ubuntu:26.04`, чтобы не упираться в anonymous rate limit Docker Hub на базовом `ubuntu`. Последующие пересоздания контейнера, включая Telegram gateway, будут использовать тот же образ.
+Если pull образа `nousresearch/hermes-agent:latest` не удался, `setup-hermes.sh` соберёт локальный образ `hermes-agent:local` из `docker/Dockerfile.hermes` и запишет выбранный `HERMES_IMAGE` в `config/.env`. Fallback-сборка по умолчанию использует `public.ecr.aws/docker/library/ubuntu:24.04`, чтобы не упираться в anonymous rate limit Docker Hub на базовом `ubuntu`. Последующие пересоздания контейнера, включая Telegram gateway, будут использовать тот же образ.
 
 ## Интерактивный запуск
 
