@@ -175,22 +175,25 @@ google_drive_oauth_login() {
     return 0
   fi
 
-  log_act "starting Google Drive OAuth login"
+  log_act "triggering Google Drive OAuth through Hermes agent"
+  log_warn "Hermes 'mcp login' does not complete Google Drive auth reliably, so setup asks the agent to use Google Drive MCP."
   log_warn "When Hermes prints an authorization URL, open it in your browser."
   log_warn "After Google redirects to 127.0.0.1, paste the full callback URL here."
 
   local fifo log_file line ready_for_callback=0 i callback rc pid fifo_fd printed_lines=0 total_lines
+  local oauth_prompt
+  oauth_prompt='Use the google_drive MCP now. Search my Google Drive for files named "test". This request is only to trigger Google OAuth authorization during setup. If authorization is required, print the authorization URL and wait for the callback URL.'
   fifo=$(mktemp -u)
   log_file=$(mktemp)
   mkfifo "$fifo"
   exec {fifo_fd}<>"$fifo"
 
-  docker exec -i hermes hermes mcp login google_drive <"$fifo" >"$log_file" 2>&1 &
+  docker exec -i hermes hermes -z "$oauth_prompt" chat <"$fifo" >"$log_file" 2>&1 &
   pid=$!
 
   for i in $(seq 1 60); do
     while IFS= read -r line; do
-      if [[ "$line" =~ https?://|callback|redirect|Redirect|Paste|Enter ]]; then
+      if [[ "$line" =~ accounts\.google\.com|127\.0\.0\.1|Paste|Enter|redirect[[:space:]]+URL|callback[[:space:]]+URL ]]; then
         ready_for_callback=1
       fi
     done <"$log_file"
@@ -213,11 +216,9 @@ google_drive_oauth_login() {
     set -e
     exec {fifo_fd}>&-
     rm -f "$fifo" "$log_file"
-    if (( rc == 0 && ready_for_callback )); then
-      log_ok "mcp.google_drive: OAuth login completed before callback input"
-    else
-      log_warn "mcp.google_drive: OAuth login exited before callback input (rc=$rc)"
-    fi
+    log_warn "mcp.google_drive: agent OAuth trigger exited before callback input (rc=$rc)"
+    log_warn "try manually: docker exec -it hermes hermes chat"
+    log_warn "then ask: Use Google Drive MCP and search my Drive for files named test."
     return 0
   fi
 
@@ -255,7 +256,7 @@ google_drive_oauth_login() {
       ;;
     *)
       log_warn "mcp.google_drive: OAuth login did not complete (rc=$rc)"
-      log_warn "retry by running './setup.sh' again, or inspect: docker exec hermes hermes mcp login google_drive"
+      log_warn "retry by running './setup.sh' again, or use: docker exec -it hermes hermes chat"
       return 0
       ;;
   esac

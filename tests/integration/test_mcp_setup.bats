@@ -285,7 +285,8 @@ STUB
 
   run su hermes -c "PATH=/tmp/bin-stub:$PATH bash '$SCRIPTS/setup-mcp.sh'"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"OAuth login required"* ]]
+  [[ "$output" == *"OAuth required"* ]]
+  [[ "$output" != *"hermes mcp login google_drive"* ]]
   grep -q -- 'google_drive http' /tmp/.gdrive-mcp-add
   grep -q -- 'https://drivemcp.googleapis.com/mcp/v1' /tmp/.gdrive-mcp-add
   grep -q -- 'oauth client-id.apps.googleusercontent.com client-secret' /tmp/.gdrive-mcp-add

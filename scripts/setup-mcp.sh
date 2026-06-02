@@ -473,7 +473,11 @@ main() {
     esac
 
     if [[ "$(toml_get "$TOML" "$mcp" auth 2>/dev/null || true)" == "oauth" ]]; then
-      log_warn "mcp.$mcp: OAuth login required — run: docker exec -it hermes hermes mcp login $mcp"
+      if [[ "$mcp" == "google_drive" ]]; then
+        log_warn "mcp.$mcp: OAuth required — run ./setup.sh or ask Hermes chat to use Google Drive MCP; direct MCP login may not produce a Google auth URL"
+      else
+        log_warn "mcp.$mcp: OAuth login required — run: docker exec -it hermes hermes mcp login $mcp"
+      fi
       continue
     fi
 

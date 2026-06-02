@@ -74,3 +74,9 @@ STUB
   run bash -n "$REPO_ROOT/setup.sh"
   [ "$status" -eq 0 ]
 }
+
+@test "setup.sh triggers Google Drive OAuth through the agent, not mcp login" {
+  grep -q 'google_drive MCP' "$SCRIPTS/setup.sh"
+  grep -q 'hermes -z "$oauth_prompt" chat' "$SCRIPTS/setup.sh"
+  ! grep -q 'hermes mcp login google_drive' "$SCRIPTS/setup.sh"
+}
