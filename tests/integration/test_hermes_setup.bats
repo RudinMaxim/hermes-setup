@@ -134,6 +134,11 @@ STUB
   rm -rf /tmp/bin-stub /tmp/.hermes-build-args
 }
 
+@test "fallback Dockerfile installs passwd before using useradd" {
+  grep -q 'passwd' "$REPO_ROOT/docker/Dockerfile.hermes"
+  grep -q 'useradd -m -s /bin/bash hermes' "$REPO_ROOT/docker/Dockerfile.hermes"
+}
+
 @test "setup-hermes.sh lets config override the fallback base image" {
   cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
   sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"
