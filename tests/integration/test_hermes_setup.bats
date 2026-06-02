@@ -134,8 +134,9 @@ STUB
   rm -rf /tmp/bin-stub /tmp/.hermes-build-args
 }
 
-@test "fallback Dockerfile installs passwd before using useradd" {
+@test "fallback Dockerfile makes useradd available before using it" {
   grep -q 'passwd' "$REPO_ROOT/docker/Dockerfile.hermes"
+  grep -q 'PATH=.*:/usr/sbin:.*:/sbin:' "$REPO_ROOT/docker/Dockerfile.hermes"
   grep -q 'useradd -m -s /bin/bash hermes' "$REPO_ROOT/docker/Dockerfile.hermes"
 }
 
