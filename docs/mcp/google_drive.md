@@ -231,11 +231,9 @@ docker exec -it hermes hermes chat
 
 Если CLI-чат показывает OAuth-ссылку — авторизация ещё не пройдена. Пройди её
 в CLI, затем повтори запрос в Telegram. Если CLI-чат работает, а Telegram всё
-ещё отказывает, перезапусти gateway-контейнер:
-
-```bash
-./scripts/setup-gateway.sh --restart
-```
+ещё отказывает, проблема уже в Telegram gateway, а не в Google Drive MCP. См.
+[`../gateways/telegram.md`](../gateways/telegram.md), раздел про принудительный
+restart gateway.
 
 ## Orphan containers warning
 Предупреждения вида:

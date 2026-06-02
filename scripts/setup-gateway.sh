@@ -99,10 +99,17 @@ validate_telegram() {
 }
 
 wait_for_gateway() {
-  local i
+  local i stable
+  stable=0
   for i in $(seq 1 30); do
-    if docker exec hermes hermes gateway status >/dev/null 2>&1; then
-      return 0
+    if docker_container_running hermes \
+      && docker exec hermes hermes gateway status >/dev/null 2>&1; then
+      stable=$((stable + 1))
+      if [[ "$stable" -ge 3 ]]; then
+        return 0
+      fi
+    else
+      stable=0
     fi
     sleep 1
   done
