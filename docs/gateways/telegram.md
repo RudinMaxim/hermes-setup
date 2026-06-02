@@ -76,7 +76,23 @@ a misleading `[SKIP]`.
 ## Google Drive / Workspace from Telegram
 
 If Google Drive works in `docker exec -it hermes hermes chat`, but the Telegram
-bot says that Google is not connected, the usual cause is token path mismatch.
+bot asks you to authorize again, the usual cause is that two Google integrations
+are enabled at once:
+
+- the built-in Google Workspace skill, which already has a token;
+- the remote `google_drive` MCP, which has its own separate OAuth flow.
+
+For a stable Telegram setup, use the Workspace skill and disable the remote
+`google_drive` MCP. Run:
+
+```bash
+./scripts/stabilize-google-workspace.sh
+```
+
+The script verifies that the Workspace token exists, links the legacy token
+path, disables `mcp_servers.google_drive.enabled`, checks Hermes config, and
+restarts the Telegram gateway.
+
 The CLI Google Workspace authorization stores the token here:
 
 ```text

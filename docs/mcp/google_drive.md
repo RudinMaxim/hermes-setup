@@ -268,6 +268,19 @@ Google не подключён, синхронизируй gateway:
 ./scripts/setup-gateway.sh --restart
 ```
 
+Если Telegram снова просит OAuth-login, значит он выбрал remote MCP
+`google_drive`, а не встроенный Workspace skill. Это два разных OAuth-механизма.
+Для стабильной работы через Telegram оставь Workspace skill и отключи remote
+MCP одной командой:
+
+```bash
+./scripts/stabilize-google-workspace.sh
+```
+
+Скрипт не удаляет `/opt/data/google_token.json`; он только создаёт совместимую
+ссылку для старого пути, выключает `mcp_servers.google_drive.enabled` и
+перезапускает gateway.
+
 ## 4. Проверка
 ```bash
 docker exec hermes hermes mcp test google_drive
