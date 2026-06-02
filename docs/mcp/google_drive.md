@@ -91,6 +91,17 @@ Then sync MCP config:
 ./scripts/setup-mcp.sh
 ```
 
+If you are doing a fresh host setup, you can skip the manual enable/sync steps
+and run the one-command setup instead:
+
+```bash
+./setup.sh
+```
+
+In interactive mode it can enable `[google_drive]`, ask for the OAuth client
+credentials, sync MCP config, print the Google authorization URL, and ask you to
+paste the final callback URL.
+
 ### 7. Complete OAuth login
 
 Run:

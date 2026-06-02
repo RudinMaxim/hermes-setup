@@ -30,7 +30,7 @@ sudo ./scripts/setup-server.sh
 # 3. Проверь вход под hermes во ВТОРОМ терминале, не закрывая root-сессию:
 #   ssh hermes@<vps-ip>
 
-# 4. Переключись на hermes, заполни LLM-ключ и запусти Hermes.
+# 4. Переключись на hermes, заполни секреты и запусти один общий setup.
 su - hermes
 cd ~/hermes-setup
 nano config/.env          # укажи OPENROUTER_API_KEY=..., OPENAI_API_KEY=... или ANTHROPIC_API_KEY=...
@@ -39,15 +39,10 @@ nano config/.env          # укажи OPENROUTER_API_KEY=..., OPENAI_API_KEY=..
 #   HERMES_MODEL=openai/gpt-5.4-mini
 # Для этого укажи OPENROUTER_API_KEY=...
 # Опционально: поменяй HERMES_PROJECTS_DIR, если Filesystem MCP должен открыть другую host-директорию.
-./scripts/setup-hermes.sh
-
-# 5. Опционально: включи MCP-серверы.
-nano config/mcp.toml      # поставь enabled = true для нужных MCP
-./scripts/setup-mcp.sh
-
-# 6. Опционально: включи Telegram gateway.
-nano config/gateways.toml # поставь [telegram] enabled = true
-./scripts/setup-gateway.sh
+# Если нужен Google Drive MCP, можно заранее добавить:
+#   GOOGLE_DRIVE_OAUTH_CLIENT_ID=...
+#   GOOGLE_DRIVE_OAUTH_CLIENT_SECRET=...
+./setup.sh
 ```
 
 `setup-hermes.sh` сам создаёт `config/.env` из `config/.env.example`, если файла ещё нет. Если LLM-ключ не заполнен, скрипт остановится с понятным сообщением.
@@ -62,7 +57,11 @@ nano config/gateways.toml # поставь [telegram] enabled = true
 cd ~/hermes-setup && ./setup.sh
 ```
 
-В интерактивном терминале он спросит LLM-ключ, запустит Hermes, а затем предложит настроить Telegram gateway и MCP. Для scripted-запуска используй `--non-interactive` и заранее заполни `config/.env`.
+В интерактивном терминале он спросит недостающий LLM-ключ, запустит Hermes,
+предложит включить Google Drive MCP, спросит OAuth client id/secret, синхронизирует
+MCP, проведёт OAuth login через ссылку + callback URL, а затем синхронизирует
+gateway. Для scripted-запуска используй `--non-interactive` и заранее заполни
+`config/.env`.
 
 ## MCP
 
