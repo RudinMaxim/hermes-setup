@@ -144,6 +144,10 @@ STUB
   grep -q 'xz-utils' "$REPO_ROOT/docker/Dockerfile.hermes"
 }
 
+@test "fallback Dockerfile installs PyYAML for setup helpers" {
+  grep -q 'python3-yaml' "$REPO_ROOT/docker/Dockerfile.hermes"
+}
+
 @test "fallback Dockerfile runs the gateway in foreground" {
   grep -q 'CMD \["gateway", "run"\]' "$REPO_ROOT/docker/Dockerfile.hermes"
 }
@@ -171,6 +175,34 @@ STUB
   grep -q -- '--build-arg BASE_IMAGE=ubuntu:24.04' /tmp/.hermes-build-args
 
   rm -rf /tmp/bin-stub /tmp/.hermes-build-args
+}
+
+@test "setup-hermes.sh rebuilds local fallback image without PyYAML" {
+  cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
+  sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"
+
+  mkdir -p /tmp/bin-stub
+  cat >/tmp/bin-stub/docker <<'STUB'
+#!/usr/bin/env bash
+case "$*" in
+  "info") exit 0 ;;
+  "image inspect nousresearch/hermes-agent:latest") exit 1 ;;
+  "image inspect hermes-agent:local") exit 0 ;;
+  "run --rm --entrypoint python3 hermes-agent:local -c import yaml") exit 1 ;;
+  "build "*" -t hermes-agent:local "*) touch /tmp/.hermes-local-rebuilt; exit 0 ;;
+  *) echo "stub: $*" ;;
+esac
+STUB
+  chmod +x /tmp/bin-stub/docker
+  rm -f /tmp/.hermes-local-rebuilt
+
+  run su hermes -c "PATH=/tmp/bin-stub:$PATH HERMES_NO_COMPOSE=1 bash '$SCRIPTS/setup-hermes.sh'"
+  [ "$status" -eq 0 ]
+  [ -f /tmp/.hermes-local-rebuilt ]
+  [[ "$output" == *"missing PyYAML"* ]]
+  [[ "$output" == *"built hermes-agent:local"* ]]
+
+  rm -rf /tmp/bin-stub /tmp/.hermes-local-rebuilt
 }
 
 @test "setup-hermes.sh streams fallback build output" {

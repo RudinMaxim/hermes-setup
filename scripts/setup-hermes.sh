@@ -35,6 +35,7 @@ DEFAULT_FALLBACK_BASE_IMAGE="public.ecr.aws/docker/library/ubuntu:26.04"
 DEFAULT_MODEL_PROVIDER="openrouter"
 DEFAULT_MODEL="openai/gpt-5.4-mini"
 HERMES_IMAGE=""
+IMAGE_REBUILT=0
 
 require_non_root() {
   [[ $EUID -ne 0 ]] || die "do not run as root — use the 'hermes' user"
@@ -134,6 +135,19 @@ run_fallback_build() {
   die "could not build $LOCAL_IMAGE"
 }
 
+image_has_python_yaml() {
+  docker run --rm --entrypoint python3 "$1" -c 'import yaml' >/dev/null 2>&1
+}
+
+build_local_image() {
+  local fallback_base_image
+  fallback_base_image="${HERMES_FALLBACK_BASE_IMAGE:-$(read_env_value "$ENVFILE" HERMES_FALLBACK_BASE_IMAGE 2>/dev/null || printf '%s' "$DEFAULT_FALLBACK_BASE_IMAGE")}"
+  log_act "docker build --build-arg BASE_IMAGE=$fallback_base_image -t $LOCAL_IMAGE -f docker/Dockerfile.hermes ."
+  run_fallback_build "$fallback_base_image"
+  IMAGE_REBUILT=1
+  log_ok "built $LOCAL_IMAGE"
+}
+
 ensure_image() {
   if docker_image_present "$DEFAULT_IMAGE"; then
     log_skip "image $DEFAULT_IMAGE already present"
@@ -143,7 +157,12 @@ ensure_image() {
   fi
 
   if docker_image_present "$LOCAL_IMAGE"; then
-    log_skip "image $LOCAL_IMAGE already present (local fallback)"
+    if image_has_python_yaml "$LOCAL_IMAGE"; then
+      log_skip "image $LOCAL_IMAGE already present (local fallback)"
+    else
+      log_warn "image $LOCAL_IMAGE is missing PyYAML — rebuilding local fallback"
+      build_local_image
+    fi
     HERMES_IMAGE="$LOCAL_IMAGE"
     set_env_value "$ENVFILE" HERMES_IMAGE "$HERMES_IMAGE" >/dev/null || true
     return 0
@@ -158,11 +177,7 @@ ensure_image() {
   fi
 
   log_warn "pull failed for $DEFAULT_IMAGE — falling back to local build"
-  local fallback_base_image
-  fallback_base_image="${HERMES_FALLBACK_BASE_IMAGE:-$(read_env_value "$ENVFILE" HERMES_FALLBACK_BASE_IMAGE 2>/dev/null || printf '%s' "$DEFAULT_FALLBACK_BASE_IMAGE")}"
-  log_act "docker build --build-arg BASE_IMAGE=$fallback_base_image -t $LOCAL_IMAGE -f docker/Dockerfile.hermes ."
-  run_fallback_build "$fallback_base_image"
-  log_ok "built $LOCAL_IMAGE"
+  build_local_image
   HERMES_IMAGE="$LOCAL_IMAGE"
   set_env_value "$ENVFILE" HERMES_IMAGE "$HERMES_IMAGE" >/dev/null || true
 }
@@ -241,7 +256,11 @@ container_has_mount() {
 
 ensure_compose_up() {
   if docker_container_running hermes; then
-    if container_has_mount hermes /home/hermes/projects; then
+    if (( IMAGE_REBUILT )); then
+      log_act "recreating container 'hermes' to apply rebuilt image"
+      HERMES_IMAGE="$HERMES_IMAGE" docker compose -f "$CONFIG_DIR/docker-compose.yml" up -d --force-recreate >/dev/null
+      log_ok "container 'hermes' recreated"
+    elif container_has_mount hermes /home/hermes/projects; then
       log_skip "container 'hermes' already running"
     else
       log_act "recreating container 'hermes' to apply compose mounts"
