@@ -36,9 +36,9 @@ require_files() {
   [[ -f "$ENVFILE" ]] || die "missing $ENVFILE"
 }
 
-require_hermes_running() {
-  docker_container_running hermes \
-    || die "hermes container is not running — run scripts/setup-hermes.sh first"
+require_hermes_container() {
+  docker_container_exists hermes \
+    || die "hermes container does not exist — run scripts/setup-hermes.sh first"
 }
 
 load_compose_env() {
@@ -52,7 +52,7 @@ gateway_enabled() {
   toml_get_bool "$GW_TOML" "$1" enabled
 }
 
-# True when PID 1 of the hermes container is `hermes gateway run`.
+# True when the hermes container command is the gateway runner.
 telegram_gateway_active() {
   docker inspect -f '{{join .Config.Cmd " "}}' hermes 2>/dev/null \
     | grep -q 'gateway run'
@@ -131,7 +131,7 @@ ensure_telegram() {
       log_ok "telegram gateway restarted"
       return 0
     fi
-    log_skip "telegram gateway already running (PID1 = hermes gateway run)"
+    log_skip "telegram gateway already running (command = gateway run)"
     return 0
   fi
   maybe_prompt_telegram
@@ -157,7 +157,7 @@ ensure_telegram_off() {
 
 main() {
   require_files
-  require_hermes_running
+  require_hermes_container
 
   if gateway_enabled telegram; then
     ensure_telegram

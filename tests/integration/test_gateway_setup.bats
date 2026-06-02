@@ -16,10 +16,11 @@ setup() {
 #!/usr/bin/env bash
 STATE=/tmp/.gw-stub-cmd
 case "$*" in
+  "ps -a --format {{.Names}}") echo hermes ;;
   "inspect -f "*"State.Status"*)  echo running ;;
   "inspect -f "*"Config.Cmd"*)    [[ -f "$STATE" ]] && cat "$STATE" || echo hermes ;;
-  *"docker-compose.gateway.yml up -d --force-recreate"*) echo "hermes gateway run" >"$STATE"; printf '%s\n' "${HERMES_IMAGE:-}" > /tmp/.gw-image; echo restarted ;;
-  *"docker-compose.gateway.yml up -d"*) echo "hermes gateway run" >"$STATE"; printf '%s\n' "${HERMES_IMAGE:-}" > /tmp/.gw-image; echo up ;;
+  *"docker-compose.gateway.yml up -d --force-recreate"*) echo "gateway run" >"$STATE"; printf '%s\n' "${HERMES_IMAGE:-}" > /tmp/.gw-image; echo restarted ;;
+  *"docker-compose.gateway.yml up -d"*) echo "gateway run" >"$STATE"; printf '%s\n' "${HERMES_IMAGE:-}" > /tmp/.gw-image; echo up ;;
   *"up -d --force-recreate"*)     echo "hermes" >"$STATE"; printf '%s\n' "${HERMES_IMAGE:-}" > /tmp/.gw-image; echo recreated ;;
   "exec hermes hermes gateway status"*) echo status >> /tmp/.gw-status-checks; exit 0 ;;
   *) echo "stub: $*" ;;
@@ -61,7 +62,7 @@ enable_telegram() {
   run su hermes -c "PATH=$STUB:\$PATH HERMES_NONINTERACTIVE=1 bash '$SCRIPTS/setup-gateway.sh'"
   [ "$status" -eq 0 ]
   [[ "$output" == *"telegram gateway is up"* ]]
-  grep -q 'gateway run' "$STATE"
+  [ "$(cat "$STATE")" = "gateway run" ]
 }
 
 @test "setup-gateway.sh dies on an invalid token" {
@@ -87,7 +88,7 @@ enable_telegram() {
 
 @test "setup-gateway.sh does not call Telegram when gateway is already active" {
   enable_telegram
-  echo "hermes gateway run" > "$STATE"
+  echo "gateway run" > "$STATE"
   run su hermes -c "PATH=$STUB:\$PATH HERMES_NONINTERACTIVE=1 GETME_RESPONSE='{\"ok\":false}' bash '$SCRIPTS/setup-gateway.sh'"
   [ "$status" -eq 0 ]
   [[ "$output" == *"telegram gateway already running"* ]]
@@ -95,13 +96,13 @@ enable_telegram() {
 
 @test "setup-gateway.sh --restart recreates an already active telegram gateway" {
   enable_telegram
-  echo "hermes gateway run" > "$STATE"
+  echo "gateway run" > "$STATE"
   rm -f /tmp/.gw-status-checks
   run su hermes -c "PATH=$STUB:\$PATH HERMES_NONINTERACTIVE=1 bash '$SCRIPTS/setup-gateway.sh' --restart"
   [ "$status" -eq 0 ]
   [[ "$output" == *"restarting telegram gateway"* ]]
   [[ "$output" == *"telegram gateway restarted"* ]]
-  grep -q 'gateway run' "$STATE"
+  [ "$(cat "$STATE")" = "gateway run" ]
   [ "$(wc -l < /tmp/.gw-status-checks)" -ge 3 ]
 }
 

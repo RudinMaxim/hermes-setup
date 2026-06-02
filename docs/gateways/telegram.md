@@ -54,7 +54,8 @@ If the gateway is already running and you changed `config/.env` or Hermes'
 ```
 
 Without `--restart`, an already-running gateway prints `[SKIP]`: that only means
-PID 1 is already `hermes gateway run`; it does not force a fresh config read.
+the container command is already `gateway run`; it does not force a fresh config
+read.
 
 To turn it off: set `enabled = false` and re-run — the container returns to
 idle/CLI mode.
