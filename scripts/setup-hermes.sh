@@ -196,6 +196,33 @@ ensure_volume() {
   fi
 }
 
+ensure_volume_ownership() {
+  local rc
+  set +e
+  docker run --rm --user root \
+    -v hermes_data:/opt/data \
+    --entrypoint sh "$HERMES_IMAGE" \
+    -c '
+      set -eu
+      uid=$(id -u hermes 2>/dev/null || printf "%s" 1000)
+      gid=$(id -g hermes 2>/dev/null || printf "%s" 1000)
+      owner=$(stat -c "%u:%g" /opt/data 2>/dev/null || printf "")
+      if [ "$owner" = "$uid:$gid" ] \
+        && ! find /opt/data \( ! -user "$uid" -o ! -group "$gid" \) -print -quit | grep -q .; then
+        exit 2
+      fi
+      chown -R "$uid:$gid" /opt/data
+    ' >/dev/null
+  rc=$?
+  set -e
+
+  case "$rc" in
+    0) log_ok "hermes_data ownership repaired for Hermes user" ;;
+    2) log_skip "hermes_data ownership already correct" ;;
+    *) die "could not repair hermes_data ownership" ;;
+  esac
+}
+
 ensure_network() {
   if docker network inspect hermes_net &>/dev/null; then
     log_skip "network hermes_net already exists"
@@ -224,17 +251,12 @@ ensure_compose_up() {
     return 0
   fi
   if docker_container_exists hermes; then
-    # Container exists but is stopped/exited. `compose up` would fail with
-    # 'container name already in use' — start it explicitly instead.
-    if container_has_mount hermes /home/hermes/projects; then
-      log_act "starting existing 'hermes' container"
-      docker start hermes >/dev/null
-      log_ok "container 'hermes' started"
-    else
-      log_act "recreating existing 'hermes' container to apply compose mounts"
-      HERMES_IMAGE="$HERMES_IMAGE" docker compose -f "$CONFIG_DIR/docker-compose.yml" up -d --force-recreate >/dev/null
-      log_ok "container 'hermes' recreated"
-    fi
+    # A stopped/exited/restarting container may carry stale ownership, command,
+    # or mount state. Recreate it instead of just `docker start` so the current
+    # compose file and repaired volume permissions are applied.
+    log_act "recreating existing 'hermes' container"
+    HERMES_IMAGE="$HERMES_IMAGE" docker compose -f "$CONFIG_DIR/docker-compose.yml" up -d --force-recreate >/dev/null
+    log_ok "container 'hermes' recreated"
     return 0
   fi
   log_act "docker compose up -d hermes"
@@ -349,6 +371,7 @@ main() {
   load_compose_env
   ensure_projects_dir
   ensure_volume
+  ensure_volume_ownership
   ensure_network
   ensure_compose_up
   wait_for_health

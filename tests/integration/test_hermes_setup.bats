@@ -263,6 +263,49 @@ STUB
   rm -rf /tmp/bin-stub /tmp/.hermes-recreated
 }
 
+@test "setup-hermes.sh repairs hermes_data ownership before compose up" {
+  cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
+  sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"
+
+  mkdir -p /tmp/bin-stub
+  cat >/tmp/bin-stub/docker <<'STUB'
+#!/usr/bin/env bash
+case "$*" in
+  "info") exit 0 ;;
+  "image inspect nousresearch/hermes-agent:latest") exit 0 ;;
+  "volume inspect hermes_data") exit 0 ;;
+  "run --rm --user root -v hermes_data:/opt/data --entrypoint sh nousresearch/hermes-agent:latest -c "*)
+    touch /tmp/.volume-ownership-repaired
+    exit 0
+    ;;
+  "network inspect hermes_net") exit 0 ;;
+  "ps -a --format "*) exit 0 ;;
+  "compose "*"up -d")
+    test -f /tmp/.volume-ownership-repaired || exit 9
+    touch /tmp/.compose-up-after-chown
+    echo up
+    ;;
+  "inspect -f {{.State.Status}} hermes") echo running ;;
+  "inspect -f "*"Mounts"*" hermes") echo "/home/hermes/projects" ;;
+  "exec hermes hermes --version") echo "hermes 0.1.0" ;;
+  "exec hermes sh -c test -f "*"config.yaml") exit 0 ;;
+  "exec hermes hermes config show") echo "redact_secrets: true" ;;
+  "exec -i hermes python3 - openrouter openai/gpt-5.4-mini") exit 2 ;;
+  *) echo "stub: $*" ;;
+esac
+STUB
+  chmod +x /tmp/bin-stub/docker
+  rm -f /tmp/.volume-ownership-repaired /tmp/.compose-up-after-chown
+
+  run su hermes -c "PATH=/tmp/bin-stub:$PATH bash '$SCRIPTS/setup-hermes.sh'"
+  [ "$status" -eq 0 ]
+  [ -f /tmp/.volume-ownership-repaired ]
+  [ -f /tmp/.compose-up-after-chown ]
+  [[ "$output" == *"hermes_data ownership repaired for Hermes user"* ]]
+
+  rm -rf /tmp/bin-stub /tmp/.volume-ownership-repaired /tmp/.compose-up-after-chown
+}
+
 @test "setup-hermes.sh is idempotent across full run" {
   cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
   sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"
@@ -276,6 +319,7 @@ case "$*" in
   "pull "*) touch "$STATE_FILE"; echo pulled ;;
   "volume inspect "*) [[ "${DOCKER_HAS_VOL:-0}" == "1" ]] ;;
   "volume create "*) export DOCKER_HAS_VOL=1; echo created ;;
+  "run --rm --user root -v hermes_data:/opt/data --entrypoint sh "*" -c "*) exit 2 ;;
   "network create "*) echo created ;;
   "compose "*"up -d") echo "up"; touch /tmp/.docker-stub-container ;;
   "ps -a --format "*) [[ -f /tmp/.docker-stub-container ]] && echo hermes ;;
