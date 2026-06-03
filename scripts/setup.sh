@@ -35,6 +35,9 @@ main() {
   log_act "setting up MCP servers"
   bash "$SCRIPT_DIR/setup-mcp.sh" "${PASSTHRU[@]}"
 
+  log_act "setting up skills"
+  bash "$SCRIPT_DIR/setup-skills.sh" "${PASSTHRU[@]}"
+
   if [[ -f "$GATEWAYS_TOML" ]]; then
     log_act "setting up gateways"
     bash "$SCRIPT_DIR/setup-gateway.sh" "${PASSTHRU[@]}"

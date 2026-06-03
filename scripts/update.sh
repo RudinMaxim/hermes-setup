@@ -88,6 +88,8 @@ main() {
   bash "$SCRIPT_DIR/setup-hermes.sh" "${PASSTHRU[@]}"
   log_act "re-syncing MCP servers"
   bash "$SCRIPT_DIR/setup-mcp.sh" "${PASSTHRU[@]}"
+  log_act "re-syncing skills"
+  bash "$SCRIPT_DIR/setup-skills.sh" "${PASSTHRU[@]}"
   if [[ -f "$CONFIG_DIR/gateways.toml" ]]; then
     log_act "re-syncing gateways"
     bash "$SCRIPT_DIR/setup-gateway.sh" "${PASSTHRU[@]}"
