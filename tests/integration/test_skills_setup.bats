@@ -8,6 +8,7 @@ setup() {
 
 teardown() {
   rm -f "$REPO_ROOT/config/skills.toml"
+  rm -rf "$REPO_ROOT/skills/broken"
   rm -rf /tmp/bin-stub /tmp/hermes-home /tmp/stabilized-google-workspace
 }
 
@@ -115,4 +116,64 @@ TOML
   run env PATH="/tmp/bin-stub:$PATH" bash "$SCRIPTS/setup-skills.sh"
   [ "$status" -eq 0 ]
   [ ! -e /tmp/hermes-home/skills/project_memory/SKILL.md ]
+}
+
+@test "setup-skills.sh backs up changed local skill before replacing target" {
+  cp "$REPO_ROOT/config/skills.toml.example" "$REPO_ROOT/config/skills.toml"
+  sed -i '/^\[project_memory\]/,/^$/ s|^enabled = false$|enabled = true|' "$REPO_ROOT/config/skills.toml"
+  make_docker_stub
+  mkdir -p /tmp/hermes-home/skills/project_memory
+  printf 'old skill\n' >/tmp/hermes-home/skills/project_memory/SKILL.md
+
+  run env HERMES_SKILL_BACKUP_TS=20260603-120000 PATH="/tmp/bin-stub:$PATH" bash "$SCRIPTS/setup-skills.sh"
+  [ "$status" -eq 0 ]
+  [ -f /tmp/hermes-home/backups/skills/project_memory/20260603-120000/SKILL.md ]
+  grep -q 'old skill' /tmp/hermes-home/backups/skills/project_memory/20260603-120000/SKILL.md
+  grep -q 'Project Memory' /tmp/hermes-home/skills/project_memory/SKILL.md
+}
+
+@test "setup-skills.sh rejects unsafe skill name" {
+  cat >"$REPO_ROOT/config/skills.toml" <<'TOML'
+[../bad]
+enabled = true
+type = "local"
+source = "skills/project_memory"
+description = "Bad"
+TOML
+  make_docker_stub
+
+  run env PATH="/tmp/bin-stub:$PATH" bash "$SCRIPTS/setup-skills.sh"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"rejecting unsafe skill name"* ]]
+}
+
+@test "setup-skills.sh rejects unsafe source path" {
+  cat >"$REPO_ROOT/config/skills.toml" <<'TOML'
+[project_memory]
+enabled = true
+type = "local"
+source = "../outside"
+description = "Bad"
+TOML
+  make_docker_stub
+
+  run env PATH="/tmp/bin-stub:$PATH" bash "$SCRIPTS/setup-skills.sh"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"local install failed"* ]]
+}
+
+@test "setup-skills.sh rejects local skill without SKILL.md" {
+  mkdir -p "$REPO_ROOT/skills/broken"
+  cat >"$REPO_ROOT/config/skills.toml" <<'TOML'
+[broken]
+enabled = true
+type = "local"
+source = "skills/broken"
+description = "Broken"
+TOML
+  make_docker_stub
+
+  run env PATH="/tmp/bin-stub:$PATH" bash "$SCRIPTS/setup-skills.sh"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"local install failed"* ]]
 }
