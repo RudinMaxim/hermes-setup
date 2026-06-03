@@ -1,0 +1,15 @@
+# config/skills.toml.example
+# Copy to config/skills.toml. Built-in Google Workspace stabilization is enabled
+# by default because it supports the documented stable Telegram flow.
+
+[google_workspace]
+enabled = true
+type = "builtin"
+description = "Stable Google Drive/Docs skill for Hermes gateway use"
+stabilize = true
+
+[project_memory]
+enabled = false
+type = "local"
+source = "skills/project_memory"
+description = "Project-specific workflow and memory skill"
