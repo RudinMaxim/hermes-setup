@@ -189,6 +189,55 @@ If you use a group chat, send `/sethome` in that group instead. If you do not
 care about background delivery, you can ignore the prompt, but Hermes may remind
 you again.
 
+## Private control + group delivery
+
+If you want to control Hermes only from a private DM, but send team updates into
+a Telegram group, use the group as the Hermes home channel.
+
+Recommended setup:
+
+1. Keep only your numeric Telegram user ID in `config/.env`:
+
+```env
+TELEGRAM_ALLOWED_USERS=111222333
+```
+
+2. Restart the gateway so the allowlist is re-read:
+
+```bash
+./scripts/setup-gateway.sh --restart
+```
+
+3. In the Telegram group where the bot should post updates, send:
+
+```text
+/sethome
+```
+
+Then keep normal work with Hermes in the private bot DM. In prompts, explicitly
+ask Hermes to send team-facing messages to the home channel:
+
+```text
+Используй skill project-docs-telegram.
+
+Обнови проект в Google Docs без дубля.
+Команде отправь апдейт в home channel без стоимости.
+Мне в личку отправь версию со стоимостью.
+```
+
+This setup does not require disabling Telegram privacy mode. Privacy mode limits
+which incoming group messages the bot can read; it does not stop the bot from
+receiving your private DM commands or posting outgoing messages to a group where
+it is a member. Disable privacy mode only when Hermes must read ordinary group
+messages.
+
+Official references:
+
+- Hermes Telegram docs: `/sethome` can designate any Telegram DM or group as
+  the home channel.
+- Telegram Bot API docs: privacy mode is about which group messages the bot can
+  see; bots always receive private chat messages.
+
 ## Privacy mode in groups (manual)
 
 By default a bot in a group only sees messages that start with `/` (Telegram
