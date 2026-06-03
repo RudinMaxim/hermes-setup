@@ -177,3 +177,18 @@ TOML
   [ "$status" -ne 0 ]
   [[ "$output" == *"local install failed"* ]]
 }
+
+@test "setup-skills.sh runs google_workspace stabilization when configured" {
+  cp "$REPO_ROOT/config/skills.toml.example" "$REPO_ROOT/config/skills.toml"
+  make_docker_stub
+  cat >/tmp/stabilize-google-workspace-stub.sh <<'STUB'
+#!/usr/bin/env bash
+touch /tmp/stabilized-google-workspace
+STUB
+  chmod +x /tmp/stabilize-google-workspace-stub.sh
+
+  run env HERMES_GOOGLE_WORKSPACE_STABILIZE_SCRIPT=/tmp/stabilize-google-workspace-stub.sh PATH="/tmp/bin-stub:$PATH" bash "$SCRIPTS/setup-skills.sh"
+  [ "$status" -eq 0 ]
+  [ -f /tmp/stabilized-google-workspace ]
+  [[ "$output" == *"stabilized skill.google_workspace"* ]]
+}

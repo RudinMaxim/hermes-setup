@@ -323,6 +323,28 @@ deploy_local_skill() {
   finalize_container_stage "$hermes_home" "$skill" "$staged"
 }
 
+deploy_builtin_skill() {
+  local skill="$1" stabilize_script
+  require_safe_skill_name "$skill"
+  case "$skill" in
+    google_workspace)
+      if toml_get_bool "$TOML" "$skill" stabilize; then
+        stabilize_script="${HERMES_GOOGLE_WORKSPACE_STABILIZE_SCRIPT:-$SCRIPT_DIR/stabilize-google-workspace.sh}"
+        if bash "$stabilize_script"; then
+          log_ok "stabilized skill.google_workspace"
+        else
+          log_warn "skill.google_workspace: stabilization did not complete; run CLI OAuth first if needed"
+        fi
+      else
+        log_skip "skill.google_workspace: stabilize=false"
+      fi
+      ;;
+    *)
+      log_warn "skill.$skill: no builtin handler - skipping"
+      ;;
+  esac
+}
+
 main() {
   require_example
   ensure_config
@@ -347,7 +369,7 @@ main() {
         esac
         ;;
       builtin)
-        log_skip "skill.$skill: builtin handler not implemented yet"
+        deploy_builtin_skill "$skill"
         ;;
       *)
         log_warn "skill.$skill: unknown type '$type' - skipping"
