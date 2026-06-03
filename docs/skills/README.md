@@ -13,6 +13,21 @@
 
 ## Локальные skills
 
+Самый простой путь — создать skill helper-скриптом:
+
+```bash
+./scripts/add-skill.sh my_skill "Короткое описание навыка"
+```
+
+Команда:
+
+- создаёт `skills/my_skill/SKILL.md`, если файла ещё нет;
+- добавляет enabled-секцию `[my_skill]` в `config/skills.toml`, если её ещё нет;
+- запускает `scripts/setup-skills.sh`, чтобы перенести skill в Hermes data
+  volume.
+
+Если `SKILL.md` уже существует, скрипт не перезаписывает его.
+
 Локальный навык должен лежать в директории:
 
 ```text

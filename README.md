@@ -74,6 +74,7 @@ docker exec -it hermes hermes chat          # открыть CLI Hermes
 docker logs --tail=100 hermes               # посмотреть последние логи контейнера
 ./scripts/setup-hermes.sh                   # синхронизировать config/image/container
 ./scripts/setup-mcp.sh                      # синхронизировать включённые MCP
+./scripts/add-skill.sh my_skill "..."       # создать локальный skill и сразу синхронизировать его
 ./scripts/setup-skills.sh                   # синхронизировать локальные и встроенные Hermes skills
 ./scripts/setup-gateway.sh                  # включить или выключить Telegram gateway
 ./scripts/stabilize-google-workspace.sh     # закрепить Google Drive/Docs для Telegram после CLI OAuth
