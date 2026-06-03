@@ -7,6 +7,7 @@
 - Подготавливает Debian/Ubuntu VPS: отдельный пользователь `hermes`, вход по SSH-ключу, UFW, fail2ban, unattended-upgrades.
 - Запускает Hermes Agent в Docker-контейнере: `docker exec -it hermes hermes chat`.
 - Включает MCP-серверы через `config/mcp.toml`: Playwright и Docker (оба включены по умолчанию). Остальные MCP добавляются вручную.
+- Синхронизирует локальные и встроенные Hermes skills через `config/skills.toml`; внешние skill-источники в v1 не скачиваются.
 - Монтирует `HERMES_PROJECTS_DIR` (по умолчанию `/home/hermes/projects`) в контейнер как `/home/hermes/projects` — встроенные файловые инструменты Hermes работают с этой директорией.
 - Поддерживает Telegram gateway для повседневного доступа, если в `config/gateways.toml` включить `[telegram] enabled = true`.
 - Поддерживает стабильный доступ к Google Drive/Docs из Telegram через встроенный Google Workspace skill. Remote `google_drive` MCP можно подключать отдельно, но для Telegram он не основной путь, потому что у него отдельный OAuth.
@@ -73,6 +74,7 @@ docker exec -it hermes hermes chat          # открыть CLI Hermes
 docker logs --tail=100 hermes               # посмотреть последние логи контейнера
 ./scripts/setup-hermes.sh                   # синхронизировать config/image/container
 ./scripts/setup-mcp.sh                      # синхронизировать включённые MCP
+./scripts/setup-skills.sh                   # синхронизировать локальные и встроенные Hermes skills
 ./scripts/setup-gateway.sh                  # включить или выключить Telegram gateway
 ./scripts/stabilize-google-workspace.sh     # закрепить Google Drive/Docs для Telegram после CLI OAuth
 ./scripts/update.sh                         # git pull + пере-синк всего (hermes/mcp/gateway) + обновить MCP-пакеты
@@ -93,6 +95,7 @@ hermes, MCP и gateway, и обновляет npm-пакеты включённ�
 - [`docs/01-server-setup.md`](docs/01-server-setup.md) — ручные шаги вокруг подготовки VPS: provisioning, DNS, backups.
 - [`docs/02-hermes-setup.md`](docs/02-hermes-setup.md) — как заполнить `.env`, запустить Hermes и открыть чат.
 - [`docs/mcp/README.md`](docs/mcp/README.md) — как подключать MCP-интеграции вручную через агента, + файл на каждый сервер.
+- [`docs/skills/README.md`](docs/skills/README.md) — настройка локальных и встроенных Hermes skills.
 - [`docs/gateways/telegram.md`](docs/gateways/telegram.md) — настройка Telegram bot, user ID, privacy mode и стабильный Google Drive/Docs через Workspace skill.
 - [`docs/superpowers/specs/2026-05-30-hermes-setup-design.md`](docs/superpowers/specs/2026-05-30-hermes-setup-design.md) — исходный design rationale.
 
@@ -110,6 +113,7 @@ make test              # оба набора
 setup.sh   тонкий оркестратор для hermes-side шагов
 scripts/   setup-server.sh, setup-hermes.sh, setup-mcp.sh, setup-gateway.sh + lib/
 config/    .env.example, mcp.toml.example, gateways.toml.example, docker-compose*.yml
+skills/    локальные Hermes skills, синхронизируемые через setup-skills.sh
 docker/    Dockerfile.hermes для fallback-сборки
 docs/      ручные инструкции, MCP и gateway docs
 tests/     Bats unit/integration тесты и sandbox Dockerfile
