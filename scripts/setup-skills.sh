@@ -172,12 +172,189 @@ sync_missing_example_keys() {
   done
 }
 
+enabled_skills() {
+  local s
+  for s in $(toml_sections "$TOML"); do
+    if toml_get_bool "$TOML" "$s" enabled; then
+      printf '%s\n' "$s"
+    fi
+  done
+}
+
+require_safe_skill_name() {
+  local name="$1"
+  [[ "$name" =~ ^[a-zA-Z0-9_.-]+$ ]] || \
+    die "rejecting unsafe skill name '$name' - must match a-zA-Z0-9_.-"
+}
+
+resolve_hermes_home() {
+  docker exec hermes printenv HERMES_HOME 2>/dev/null || printf '/home/hermes/.hermes\n'
+}
+
+resolve_local_source() {
+  local source="$1"
+  python3 - "$REPO_ROOT" "$source" <<'PY'
+import sys
+from pathlib import Path
+
+repo_root = Path(sys.argv[1]).resolve()
+source_value = sys.argv[2]
+source_path = Path(source_value)
+
+if source_path.is_absolute() or ".." in source_path.parts:
+    print(f"rejecting unsafe source path '{source_value}'", file=sys.stderr)
+    raise SystemExit(10)
+
+src = (repo_root / source_value).resolve()
+if repo_root not in src.parents and src != repo_root:
+    print(f"source path escapes repository: {source_value}", file=sys.stderr)
+    raise SystemExit(11)
+if not src.is_dir():
+    print(f"source directory not found: {source_value}", file=sys.stderr)
+    raise SystemExit(12)
+if not (src / "SKILL.md").is_file():
+    print("missing SKILL.md", file=sys.stderr)
+    raise SystemExit(13)
+
+for path in src.rglob("*"):
+    if path.is_symlink():
+        resolved = path.resolve()
+        if repo_root not in resolved.parents and resolved != repo_root:
+            print(f"symlink escapes repository: {path}", file=sys.stderr)
+            raise SystemExit(14)
+
+print(src)
+PY
+}
+
+prepare_container_stage() {
+  local hermes_home="$1" skill="$2" staged="$3"
+  docker exec -i hermes python3 - "$hermes_home" "$skill" "$staged" <<'PY'
+import shutil
+import sys
+from pathlib import Path
+
+hermes_home = Path(sys.argv[1])
+skill = sys.argv[2]
+staged = Path(sys.argv[3])
+target_root = hermes_home / "skills"
+
+target = target_root / skill
+if target_root.resolve() not in target.resolve().parents:
+    print(f"skill.{skill}: target escapes skills directory", file=sys.stderr)
+    raise SystemExit(15)
+if target_root.resolve() not in staged.resolve().parents:
+    print(f"skill.{skill}: staged path escapes skills directory", file=sys.stderr)
+    raise SystemExit(16)
+
+if staged.exists():
+    shutil.rmtree(staged)
+staged.mkdir(parents=True)
+PY
+}
+
+finalize_container_stage() {
+  local hermes_home="$1" skill="$2" staged="$3"
+  docker exec -i hermes python3 - "$hermes_home" "$skill" "$staged" <<'PY'
+import filecmp
+import os
+import shutil
+import sys
+from datetime import datetime
+from pathlib import Path
+
+hermes_home = Path(sys.argv[1])
+skill = sys.argv[2]
+staged = Path(sys.argv[3])
+target_root = hermes_home / "skills"
+target = target_root / skill
+
+if target_root.resolve() not in target.resolve().parents:
+    print(f"skill.{skill}: target escapes skills directory", file=sys.stderr)
+    raise SystemExit(15)
+if target_root.resolve() not in staged.resolve().parents:
+    print(f"skill.{skill}: staged path escapes skills directory", file=sys.stderr)
+    raise SystemExit(16)
+if not (staged / "SKILL.md").is_file():
+    print(f"skill.{skill}: staged copy missing SKILL.md", file=sys.stderr)
+    raise SystemExit(17)
+
+def same_tree(left: Path, right: Path) -> bool:
+    if not right.exists():
+        return False
+    cmp = filecmp.dircmp(left, right)
+    if cmp.left_only or cmp.right_only or cmp.funny_files:
+        return False
+    for name in cmp.common_files:
+        if not filecmp.cmp(left / name, right / name, shallow=False):
+            return False
+    return all(same_tree(left / name, right / name) for name in cmp.common_dirs)
+
+try:
+    if same_tree(staged, target):
+        shutil.rmtree(staged)
+        raise SystemExit(2)
+
+    if target.exists():
+        backup_root = hermes_home / "backups" / "skills" / skill
+        backup_root.mkdir(parents=True, exist_ok=True)
+        backup_name = os.environ.get("HERMES_SKILL_BACKUP_TS") or datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+        backup = backup_root / backup_name
+        shutil.copytree(target, backup)
+        shutil.rmtree(target)
+
+    os.replace(staged, target)
+finally:
+    if staged.exists():
+        shutil.rmtree(staged)
+PY
+}
+
+deploy_local_skill() {
+  local skill="$1" source src hermes_home staged
+  require_safe_skill_name "$skill"
+  source=$(toml_get "$TOML" "$skill" source) || die "skill.$skill: missing 'source'"
+  src=$(resolve_local_source "$source") || return 1
+  hermes_home=$(resolve_hermes_home)
+  staged="$hermes_home/skills/.$skill.incoming-$$"
+
+  prepare_container_stage "$hermes_home" "$skill" "$staged" || return 1
+  docker cp "$src/." "hermes:$staged/" || return 1
+  finalize_container_stage "$hermes_home" "$skill" "$staged"
+}
+
 main() {
   require_example
   ensure_config
   sync_missing_example_sections
   sync_missing_example_keys
   require_hermes_running
+
+  local skill type rc
+  while IFS= read -r skill; do
+    [[ -z "$skill" ]] && continue
+    type=$(toml_get "$TOML" "$skill" type) || die "skill.$skill: missing 'type'"
+    case "$type" in
+      local)
+        set +e
+        deploy_local_skill "$skill"
+        rc=$?
+        set -e
+        case "$rc" in
+          0) log_ok "installed skill.$skill" ;;
+          2) log_skip "skill.$skill: already up to date" ;;
+          *) die "skill.$skill: local install failed" ;;
+        esac
+        ;;
+      builtin)
+        log_skip "skill.$skill: builtin handler not implemented yet"
+        ;;
+      *)
+        log_warn "skill.$skill: unknown type '$type' - skipping"
+        ;;
+    esac
+  done < <(enabled_skills)
+
   log_ok "skills sync complete"
 }
 

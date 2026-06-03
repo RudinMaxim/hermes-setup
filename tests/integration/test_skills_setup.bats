@@ -26,11 +26,17 @@ case "$1 $2" in
   "exec -i")
     shift 3
     case "$*" in
-      "python3 - "*) python3 - "$@" ;;
-      "python3 -") python3 - ;;
+      "python3 - "*) "$@" ;;
+      "python3 -") "$@" ;;
       *) echo "exec-i-stub: $*" ;;
     esac ;;
-  "cp"*) echo "cp-stub: $*" ;;
+  "cp"*)
+    src="$2"
+    dest="$3"
+    dest="${dest#hermes:}"
+    mkdir -p "$dest"
+    cp -a "${src%/.}/." "$dest/"
+    ;;
   *) echo "stub: $*" ;;
 esac
 STUB
@@ -77,4 +83,36 @@ TOML
   grep -q '^description = "Project-specific workflow and memory skill"$' "$REPO_ROOT/config/skills.toml"
   grep -q '^enabled = true$' "$REPO_ROOT/config/skills.toml"
   [[ "$output" == *"updated skill.project_memory in config/skills.toml from example"* ]]
+}
+
+@test "setup-skills.sh installs enabled local skill into Hermes skills dir" {
+  cp "$REPO_ROOT/config/skills.toml.example" "$REPO_ROOT/config/skills.toml"
+  sed -i '/^\[project_memory\]/,/^$/ s|^enabled = false$|enabled = true|' "$REPO_ROOT/config/skills.toml"
+  make_docker_stub
+
+  run env PATH="/tmp/bin-stub:$PATH" bash "$SCRIPTS/setup-skills.sh"
+  [ "$status" -eq 0 ]
+  [ -f /tmp/hermes-home/skills/project_memory/SKILL.md ]
+  [[ "$output" == *"installed skill.project_memory"* ]]
+}
+
+@test "setup-skills.sh skips unchanged local skill on second run" {
+  cp "$REPO_ROOT/config/skills.toml.example" "$REPO_ROOT/config/skills.toml"
+  sed -i '/^\[project_memory\]/,/^$/ s|^enabled = false$|enabled = true|' "$REPO_ROOT/config/skills.toml"
+  make_docker_stub
+
+  run env PATH="/tmp/bin-stub:$PATH" bash "$SCRIPTS/setup-skills.sh"
+  [ "$status" -eq 0 ]
+  run env PATH="/tmp/bin-stub:$PATH" bash "$SCRIPTS/setup-skills.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"skill.project_memory: already up to date"* ]]
+}
+
+@test "setup-skills.sh does not install disabled local skill" {
+  cp "$REPO_ROOT/config/skills.toml.example" "$REPO_ROOT/config/skills.toml"
+  make_docker_stub
+
+  run env PATH="/tmp/bin-stub:$PATH" bash "$SCRIPTS/setup-skills.sh"
+  [ "$status" -eq 0 ]
+  [ ! -e /tmp/hermes-home/skills/project_memory/SKILL.md ]
 }
