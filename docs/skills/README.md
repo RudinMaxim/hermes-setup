@@ -54,6 +54,164 @@ description = "Project-specific workflow and memory skill"
 `enabled = false` означает "не устанавливать и не обновлять". Скрипт не удаляет
 уже установленный навык автоматически.
 
+## Рабочий цикл
+
+### 1. Создать skill
+
+```bash
+./scripts/add-skill.sh project-docs-telegram "Ведёт проектные документы и Telegram-апдейты"
+```
+
+После этого редактируй файл на host:
+
+```bash
+nano skills/project-docs-telegram/SKILL.md
+```
+
+Не редактируй копию внутри контейнера напрямую: следующий `setup-skills.sh`
+перезапишет её из репозитория.
+
+### 2. Перенести skill в контейнер
+
+```bash
+./scripts/setup-skills.sh
+```
+
+Скрипт копирует локальный каталог:
+
+```text
+skills/<name>/
+```
+
+в Hermes data dir внутри контейнера:
+
+```text
+/opt/data/skills/<name>/
+```
+
+Если контейнер использует другой `HERMES_HOME`, скрипт берёт его из
+`docker exec hermes printenv HERMES_HOME`.
+
+### 3. Проверить, что skill установлен
+
+Проверить список:
+
+```bash
+docker exec hermes ls -la /opt/data/skills
+```
+
+Проверить конкретный файл:
+
+```bash
+docker exec hermes sed -n '1,120p' /opt/data/skills/project-docs-telegram/SKILL.md
+```
+
+Проверить весь файл:
+
+```bash
+docker exec hermes cat /opt/data/skills/project-docs-telegram/SKILL.md
+```
+
+### 4. Обновить skill
+
+1. Отредактируй host-файл:
+
+```bash
+nano skills/project-docs-telegram/SKILL.md
+```
+
+2. Перенеси изменения в контейнер:
+
+```bash
+./scripts/setup-skills.sh
+```
+
+3. Проверь контейнерную копию:
+
+```bash
+docker exec hermes sed -n '1,80p' /opt/data/skills/project-docs-telegram/SKILL.md
+```
+
+Если содержимое не менялось, скрипт напечатает:
+
+```text
+[SKIP] skill.<name>: already up to date
+```
+
+Если содержимое изменилось, скрипт сделает backup старой версии и установит
+новую:
+
+```text
+[OK] installed skill.<name>
+```
+
+### 5. Найти backup старой версии
+
+Старые версии сохраняются внутри контейнера:
+
+```text
+/opt/data/backups/skills/<name>/<timestamp>/
+```
+
+Посмотреть backups:
+
+```bash
+docker exec hermes find /opt/data/backups/skills/project-docs-telegram -maxdepth 2 -type f -name SKILL.md
+```
+
+Посмотреть конкретную старую версию:
+
+```bash
+docker exec hermes sed -n '1,120p' /opt/data/backups/skills/project-docs-telegram/<timestamp>/SKILL.md
+```
+
+### 6. Отключить автообновление skill
+
+В `config/skills.toml`:
+
+```toml
+[project-docs-telegram]
+enabled = false
+type = "local"
+source = "skills/project-docs-telegram"
+description = "..."
+```
+
+После этого:
+
+```bash
+./scripts/setup-skills.sh
+```
+
+`enabled = false` не удаляет уже установленный skill из контейнера. Он только
+запрещает установку и обновление из репозитория.
+
+### 7. Типовые ошибки
+
+Если команда пишет:
+
+```text
+missing SKILL.md
+```
+
+значит в `source = "skills/<name>"` нет файла `SKILL.md`.
+
+Если skill не обновился, проверь, что ты редактировал именно host-файл:
+
+```text
+skills/<name>/SKILL.md
+```
+
+а не контейнерную копию:
+
+```text
+/opt/data/skills/<name>/SKILL.md
+```
+
+Если Telegram gateway перезапустился во время `setup-skills.sh`, это ожидаемо
+для встроенного `google_workspace`: его стабилизатор пересоздаёт gateway, чтобы
+Telegram видел актуальный Google Workspace token.
+
 ## Google Workspace
 
 `google_workspace` — built-in skill для стабильного доступа к Google Drive/Docs
