@@ -376,6 +376,39 @@ STUB
   rm -rf /tmp/bin-stub /tmp/.volume-ownership-repaired /tmp/.compose-up-after-chown
 }
 
+@test "setup-hermes.sh enables telegram require_mention in config.yaml" {
+  cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
+  sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"
+
+  mkdir -p /tmp/bin-stub
+  cat >/tmp/bin-stub/docker <<'STUB'
+#!/usr/bin/env bash
+case "$*" in
+  "info") exit 0 ;;
+  "image inspect nousresearch/hermes-agent:latest") exit 0 ;;
+  "volume inspect hermes_data") exit 0 ;;
+  "network inspect hermes_net") exit 0 ;;
+  "inspect -f {{.State.Status}} hermes") echo running ;;
+  "inspect -f {{range .Mounts}}{{.Destination}}{{\"\\n\"}}{{end}} hermes") echo "/home/hermes/projects" ;;
+  "exec hermes hermes --version") echo "hermes 0.1.0" ;;
+  "exec hermes sh -c test -f "*"config.yaml") exit 0 ;;
+  "exec hermes hermes config show") echo "redact_secrets: true" ;;
+  "exec -i hermes python3 - openrouter openai/gpt-5.4-mini") cat >/tmp/.hermes-config-snippet; exit 0 ;;
+  "compose "*"up -d") echo up ;;
+  *) echo "stub: $*" ;;
+esac
+STUB
+  chmod +x /tmp/bin-stub/docker
+  rm -f /tmp/.hermes-config-snippet
+
+  run su hermes -c "PATH=/tmp/bin-stub:$PATH bash '$SCRIPTS/setup-hermes.sh'"
+  [ "$status" -eq 0 ]
+  grep -q 'telegram = config.get("telegram")' /tmp/.hermes-config-snippet
+  grep -q 'telegram\["require_mention"\] = True' /tmp/.hermes-config-snippet
+
+  rm -rf /tmp/bin-stub /tmp/.hermes-config-snippet
+}
+
 @test "setup-hermes.sh is idempotent across full run" {
   cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
   sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"

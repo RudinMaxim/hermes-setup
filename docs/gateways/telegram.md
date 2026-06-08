@@ -1,91 +1,90 @@
 # Telegram gateway
 
-Daily access to Hermes through a Telegram bot. Config-driven via
-`config/gateways.toml`; the token and allowlist live in `config/.env`.
+Ежедневный доступ к Hermes через Telegram-бота. Настраивается через
+`config/gateways.toml`; токен и allowlist лежат в `config/.env`.
 
-## 1. Create the bot (manual, in Telegram)
+## 1. Создать бота (вручную, в Telegram)
 
-1. Open a chat with [@BotFather](https://t.me/BotFather).
-2. Send `/newbot`, pick a name and a username ending in `bot`.
-3. BotFather replies with an **HTTP API token** like `123456789:AAH...`. Keep it secret.
+1. Открой чат с [@BotFather](https://t.me/BotFather).
+2. Отправь `/newbot`, выбери имя и username, который оканчивается на `bot`.
+3. BotFather вернёт **HTTP API token** вида `123456789:AAH...`. Храни его в секрете.
 
-## 2. Find your numeric user ID (manual)
+## 2. Узнать свой numeric user ID (вручную)
 
-The allowlist is by **numeric user ID**, not @username (default-deny — anyone
-not listed is ignored).
+Allowlist задаётся по **числовому user ID**, а не по @username
+(default-deny — всё, что не перечислено, игнорируется).
 
-1. Open a chat with [@userinfobot](https://t.me/userinfobot) (or @RawDataBot).
-2. It replies with your `Id:` — a number like `111222333`.
-3. Repeat for every person who should have access; join the IDs with commas.
+1. Открой чат с [@userinfobot](https://t.me/userinfobot) (или @RawDataBot).
+2. Он ответит твоим `Id:` — числом вроде `111222333`.
+3. Повтори для каждого человека, которому нужен доступ, и соедини ID через запятую.
 
-## 3. Configure
+## 3. Настроить
 
-You can let the setup script prompt you (interactive run), or edit files directly.
+Можно дать скрипту спросить недостающие значения в интерактивном режиме, либо
+заполнить файлы вручную.
 
-**Interactive:** run `./setup.sh` (or `./scripts/setup-gateway.sh`) in a terminal
-— if the token/allowlist are missing it asks for them and writes `config/.env`
-for you (the token is typed hidden, never echoed).
+**Интерактивно:** запусти `./setup.sh` (или `./scripts/setup-gateway.sh`) в
+терминале — если токен или allowlist отсутствуют, скрипт спросит их и запишет в
+`config/.env` (токен вводится скрыто, не печатается на экран).
 
-**Manual:** add to `config/.env`:
+**Вручную:** добавь в `config/.env`:
 ```
 TELEGRAM_BOT_TOKEN=123456789:AAH...
 TELEGRAM_ALLOWED_USERS=111222333,444555666
 ```
-and enable the gateway in `config/gateways.toml`:
+и включи gateway в `config/gateways.toml`:
 ```toml
 [telegram]
 enabled = true
 ```
 
-## 4. Apply
+## 4. Применить
 
 ```bash
 ./scripts/setup-gateway.sh
 ```
-The script validates the token (`getMe`), checks the allowlist is numeric, then
-recreates the container with the gateway command. The Hermes image already has
-`hermes` as its entrypoint, so the compose override must be:
+Скрипт проверяет токен (`getMe`), убеждается, что allowlist числовой, а затем
+пересоздаёт контейнер с командой gateway. В образе Hermes уже задан `hermes`
+как entrypoint, поэтому override должен быть таким:
 
 ```yaml
 command: ["gateway", "run"]
 ```
 
-Do not use `command: ["hermes", "gateway", "run"]`: that expands to
-`hermes hermes gateway run` and the container exits with
+Не используй `command: ["hermes", "gateway", "run"]`: это разворачивается в
+`hermes hermes gateway run`, и контейнер падает с ошибкой
 `invalid choice: 'hermes'`.
 
-Message your bot to test. Re-running is safe — if nothing changed it only
-prints `[SKIP]`.
+Отправь сообщение боту и проверь, что он отвечает. Повторный запуск безопасен:
+если ничего не изменилось, скрипт только выведет `[SKIP]`.
 
-If the gateway is already running and you changed `config/.env` or Hermes'
-`/opt/data/config.yaml`, force it to recreate the gateway container:
+Если gateway уже запущен, но ты изменил `config/.env` или `Hermes`-конфиг
+`/opt/data/config.yaml`, принудительно пересоздай контейнер gateway:
 
 ```bash
 ./scripts/setup-gateway.sh --restart
 ```
 
-Without `--restart`, an already-running gateway prints `[SKIP]`: that only means
-the container command is already `gateway run`; it does not force a fresh config
-read.
+Без `--restart` уже запущенный gateway напишет `[SKIP]`: это значит только, что
+команда контейнера уже `gateway run`, но свежий конфиг не перечитывался.
 
-The setup script also checks broken gateway states. If it detects the old
-duplicated command (`hermes gateway run`), a stopped container, or a failed
-`hermes gateway status`, it recreates the gateway container instead of printing
-a misleading `[SKIP]`.
+Скрипт также проверяет сломанные состояния gateway. Если он видит старую
+дублированную команду (`hermes gateway run`), остановленный контейнер или
+ошибку `hermes gateway status`, он пересоздаёт контейнер вместо ложного `[SKIP]`.
 
-## Google Drive / Workspace from Telegram
+## Google Drive / Workspace из Telegram
 
-### Проверенно рабочая схема
+### Проверенная рабочая схема
 
 Для Telegram используй встроенный Google Workspace skill, а не remote
-`google_drive` MCP. Remote MCP живёт отдельным OAuth и может снова просить
+`google_drive` MCP. Remote MCP использует отдельный OAuth и может снова просить
 авторизацию, даже если Workspace skill уже читает Drive.
 
 Рабочая схема:
 
-1. Авторизовать Google Workspace один раз через CLI-чат Hermes.
-2. Убедиться, что появился `/opt/data/google_token.json`.
-3. Запустить стабилизатор:
+1. Один раз авторизуй Google Workspace через CLI-чат Hermes.
+2. Убедись, что появился `/opt/data/google_token.json`.
+3. Запусти стабилизатор:
 
 ```bash
 ./scripts/stabilize-google-workspace.sh
@@ -97,64 +96,64 @@ a misleading `[SKIP]`.
 Используй Google Workspace skill. Покажи последние 5 файлов из моего Google Drive.
 ```
 
-Если контейнер gateway пересоздавался, или Telegram снова просит Google OAuth,
+Если контейнер gateway пересоздавался или Telegram снова просит Google OAuth,
 повтори:
 
 ```bash
 ./scripts/stabilize-google-workspace.sh
 ```
 
-If Google Drive works in `docker exec -it hermes hermes chat`, but the Telegram
-bot asks you to authorize again, the usual cause is that two Google integrations
-are enabled at once:
+Если Google Drive работает в `docker exec -it hermes hermes chat`, но Telegram
+бот снова просит авторизацию, обычно причина в том, что одновременно включены
+две Google-интеграции:
 
-- the built-in Google Workspace skill, which already has a token;
-- the remote `google_drive` MCP, which has its own separate OAuth flow.
+- встроенный Google Workspace skill, у которого уже есть токен;
+- remote `google_drive` MCP, у которого свой отдельный OAuth flow.
 
-For a stable Telegram setup, use the Workspace skill and disable the remote
-`google_drive` MCP. Run:
+Для стабильной работы Telegram используй Workspace skill и отключи remote
+`google_drive` MCP. Запусти:
 
 ```bash
 ./scripts/stabilize-google-workspace.sh
 ```
 
-The script verifies that the Workspace token exists, links the legacy token
-path, disables `mcp_servers.google_drive.enabled`, checks Hermes config, and
-restarts the Telegram gateway.
+Скрипт проверяет наличие Workspace token, создаёт legacy token path, отключает
+`mcp_servers.google_drive.enabled`, проверяет Hermes config и перезапускает
+Telegram gateway.
 
-The CLI Google Workspace authorization stores the token here:
+CLI-авторизация Google Workspace сохраняет токен здесь:
 
 ```text
 /opt/data/google_token.json
 ```
 
-Some Workspace skill checks still look at the older path:
+Некоторые проверки Workspace skill всё ещё смотрят на старый путь:
 
 ```text
 /home/hermes/.hermes/google_token.json
 ```
 
-Run the gateway setup once after successful CLI authorization:
+После успешной CLI-авторизации один раз запусти настройку gateway:
 
 ```bash
 ./scripts/setup-gateway.sh
 ```
 
-If `/opt/data/google_token.json` exists, the script creates this compatibility
-symlink inside the container:
+Если `/opt/data/google_token.json` существует, скрипт создаст внутри контейнера
+compatibility symlink:
 
 ```text
 /home/hermes/.hermes/google_token.json -> /opt/data/google_token.json
 ```
 
-Then ask the bot again. If you also changed `config/.env` or
-`/opt/data/config.yaml`, use:
+Потом попробуй бота ещё раз. Если ты также менял `config/.env` или
+`/opt/data/config.yaml`, используй:
 
 ```bash
 ./scripts/setup-gateway.sh --restart
 ```
 
-Manual checks:
+Проверка вручную:
 
 ```bash
 docker exec hermes sh -lc 'echo HOME=$HOME; echo HERMES_HOME=$HERMES_HOME'
@@ -162,12 +161,12 @@ docker exec hermes sh -lc 'ls -l /opt/data/google_token.json /home/hermes/.herme
 docker exec hermes hermes gateway status
 ```
 
-To turn it off: set `enabled = false` and re-run — the container returns to
-idle/CLI mode.
+Выключить можно так: поставь `enabled = false` и запусти скрипт снова — контейнер
+вернётся в idle/CLI mode.
 
-## Home channel prompt
+## Запрос home channel
 
-After the Telegram gateway starts, Hermes may send this message:
+После запуска Telegram gateway Hermes может прислать такое сообщение:
 
 ```text
 No home channel is set for Telegram. A home channel is where Hermes delivers cron job results and cross-platform messages.
@@ -175,47 +174,46 @@ No home channel is set for Telegram. A home channel is where Hermes delivers cro
 Type /sethome to make this chat your home channel, or ignore to skip.
 ```
 
-This is not an auth error and it is not related to MCP. Hermes is asking which
-Telegram chat should receive background messages: cron results, scheduled jobs,
-and messages produced outside the current chat.
+Это не ошибка авторизации и не проблема MCP. Hermes спрашивает, какой Telegram-чат
+должен получать фоновые сообщения: результаты cron job, запланированные задачи и
+сообщения, созданные вне текущего чата.
 
-If this private chat with the bot is where you want those messages, send:
+Если это приватный чат с ботом, отправь:
 
 ```text
 /sethome
 ```
 
-If you use a group chat, send `/sethome` in that group instead. If you do not
-care about background delivery, you can ignore the prompt, but Hermes may remind
-you again.
+Если используешь группу, отправь `/sethome` в этой группе. Если фоновая доставка
+не нужна, запрос можно игнорировать, но Hermes может напомнить снова.
 
-## Private control + group delivery
+## Личное управление + групповая доставка
 
-If you want to control Hermes only from a private DM, but send team updates into
-a Telegram group, use the group as the Hermes home channel.
+Если хочешь управлять Hermes только из личного DM, но отправлять командные
+обновления в Telegram-группу, используй группу как Hermes home channel.
 
-Recommended setup:
+Рекомендуемая схема:
 
-1. Keep only your numeric Telegram user ID in `config/.env`:
+1. Оставь в `config/.env` только свой numeric Telegram user ID:
 
 ```env
 TELEGRAM_ALLOWED_USERS=111222333
 ```
 
-2. Restart the gateway so the allowlist is re-read:
+2. Перезапусти gateway, чтобы allowlist прочитался заново:
 
 ```bash
 ./scripts/setup-gateway.sh --restart
 ```
 
-3. In the Telegram group where the bot should post updates, send:
+3. В Telegram-группе, куда бот должен писать обновления, отправь:
 
 ```text
 /sethome
 ```
 
-Then keep normal work with Hermes in the private bot DM. In prompts, explicitly
-ask Hermes to send team-facing messages to the home channel:
+После этого работай с Hermes через личный чат с ботом. В запросах явно проси
+отправлять командные сообщения в home channel и оставлять личную версию в DM:
 
 ```text
 Используй skill project-docs-telegram.
@@ -225,22 +223,45 @@ ask Hermes to send team-facing messages to the home channel:
 Мне в личку отправь версию со стоимостью.
 ```
 
-This setup does not require disabling Telegram privacy mode. Privacy mode limits
-which incoming group messages the bot can read; it does not stop the bot from
-receiving your private DM commands or posting outgoing messages to a group where
-it is a member. Disable privacy mode only when Hermes must read ordinary group
-messages.
+Для этой схемы не нужно выключать Telegram privacy mode. Оставь privacy mode
+включённым и не делай бота админом группы, если хочешь, чтобы он игнорировал
+обычный групповой чат. В этом режиме бот получает:
 
-Official references:
+- личные DM-сообщения;
+- group commands, явно адресованные ему;
+- сообщения с `@mention` и ответы на его собственные сообщения;
+- исходящие сообщения, которые он отправляет в home channel.
 
-- Hermes Telegram docs: `/sethome` can designate any Telegram DM or group as
-  the home channel.
-- Telegram Bot API docs: privacy mode is about which group messages the bot can
-  see; bots always receive private chat messages.
+Это даёт именно нужное разделение: ты управляешь Hermes в личке, рабочая группа
+остаётся тихой, пока ты не упомянешь бота, а Hermes при этом может публиковать
+сообщения в группу.
 
-## Privacy mode in groups (manual)
+Чтобы этот режим был включён постоянно, в Hermes config должен быть флаг:
 
-By default a bot in a group only sees messages that start with `/` (Telegram
-"privacy mode"). To let it read all group messages: @BotFather → `/setprivacy`
-→ select the bot → **Disable**. The numeric allowlist still filters senders the
-same way in groups and in direct messages.
+```yaml
+telegram:
+  require_mention: true
+```
+
+`./scripts/setup-hermes.sh` теперь включает этот флаг по умолчанию при
+инициализации `config.yaml`.
+
+Быстрая проверка:
+
+1. Отправь боту DM и убедись, что он отвечает там.
+2. В рабочей группе отправь обычное сообщение без упоминания. Бот должен молчать.
+3. В рабочей группе отправь `@<botname> ...`. Бот должен отреагировать.
+4. Отправь `/sethome` в группе, если именно эта группа должна получать исходящие обновления.
+
+Официальные ссылки:
+
+- Документация Hermes по Telegram: `/sethome` можно назначить для любого Telegram DM или группы.
+- Telegram Bot API docs: privacy mode определяет, какие сообщения из группы бот видит; приватные сообщения бот получает всегда.
+
+## Privacy mode в группах (вручную)
+
+По умолчанию бот в группе видит только сообщения, которые начинаются с `/`
+(Telegram privacy mode). Также он получает `@mention` и ответы на свои сообщения.
+Чтобы бот видел все сообщения группы: @BotFather → `/setprivacy` → выбери бота
+→ **Disable**. Numeric allowlist всё так же фильтрует отправителей и в группах,
+и в личных сообщениях.

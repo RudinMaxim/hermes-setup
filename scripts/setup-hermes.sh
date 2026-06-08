@@ -378,16 +378,29 @@ if not isinstance(config, dict):
 
 current = config.get("model")
 desired = {"provider": provider, "default": model}
-if current == desired:
+telegram = config.get("telegram")
+if not isinstance(telegram, dict):
+    telegram = {}
+
+changed = False
+if current != desired:
+    config["model"] = desired
+    changed = True
+
+if telegram.get("require_mention") is not True:
+    telegram["require_mention"] = True
+    changed = True
+
+if not changed:
     raise SystemExit(2)
 
-config["model"] = desired
+config["telegram"] = telegram
 path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
 PY
   rc=$?
   set -e
   case "$rc" in
-    0) log_ok "Hermes model default set to $provider/$model" ;;
+    0) log_ok "Hermes model default set to $provider/$model; telegram.require_mention enabled" ;;
     2) log_skip "Hermes model default already $provider/$model" ;;
     *) die "could not update Hermes model config" ;;
   esac
