@@ -117,6 +117,7 @@ hermes gateway restart >/dev/null
 log_ok "Hermes Telegram gateway is installed and running"
 
 bash "$SCRIPT_DIR/macos/install-obsidian-sync.sh"
+bash "$SCRIPT_DIR/macos/install-runtime-jobs.sh"
 bash "$SCRIPT_DIR/macos/check-multimedia.sh" \
   || log_warn "one or more multimedia checks need attention"
 log_ok "native macOS setup complete"

@@ -39,6 +39,60 @@ launchctl print "gui/$(id -u)/ai.hermes.obsidian-sync"
 tail -n 100 ~/Library/Logs/hermes/obsidian-sync.log
 ```
 
+## Health-check и автозапуск Ollama
+
+`setup-macos.sh` устанавливает два пользовательских `launchd` job:
+
+- `ai.hermes.ollama-watchdog` каждую минуту проверяет Ollama API и открывает
+  Ollama app, если сервис недоступен;
+- `ai.hermes.health-check` каждые 15 минут проверяет Hermes gateway, Ollama и
+  выбранную модель, Todoist MCP, Obsidian MCP/Git, Google Workspace и Telegram.
+
+Health-check отправляет сообщение в Telegram только при появлении новой ошибки,
+изменении набора ошибок или восстановлении. Поэтому штатные успешные проверки
+не создают сообщения. Токен читается из `~/.hermes/.env` и не записывается в
+plist.
+
+Ручная проверка:
+
+```bash
+make health-macos
+launchctl print "gui/$(id -u)/ai.hermes.ollama-watchdog"
+launchctl print "gui/$(id -u)/ai.hermes.health-check"
+tail -n 100 ~/Library/Logs/hermes/health-check.log
+tail -n 100 ~/Library/Logs/hermes/health-check.error.log
+```
+
+Интервалы и chat ID задаются в `config/macos.env`:
+
+```env
+OLLAMA_WATCH_INTERVAL=60
+HERMES_HEALTH_INTERVAL=900
+HEALTHCHECK_TELEGRAM_CHAT_ID=745637014
+```
+
+## Стабильные обновления
+
+Автоматическое бесконтрольное обновление Hermes отключено. Проверка и
+применение разделены:
+
+```bash
+make check-update-macos
+make update-macos
+```
+
+`check-update-macos` не меняет установку. `update-macos` требует чистый Hermes
+checkout, запоминает текущие version/commit, запускает штатный
+`hermes update --backup`, перезапускает gateway и проверяет core-сервисы. Если
+gateway или Ollama после обновления не работают, скрипт автоматически возвращает
+прежний commit, переустанавливает зависимости и снова запускает gateway.
+Временный сбой внешнего Todoist/Google/Telegram не вызывает откат, но
+показывается последующим полным health-check.
+
+Проверенная версия хранится в `HERMES_EXPECTED_VERSION`, ветка обновлений — в
+`HERMES_UPDATE_BRANCH`. После успешного осознанного обновления значение версии
+следует изменить в локальном `config/macos.env` и в example отдельным коммитом.
+
 ## Telegram
 
 Штатная команда Hermes устанавливает `~/Library/LaunchAgents/ai.hermes.gateway.plist`.
