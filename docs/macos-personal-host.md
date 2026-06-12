@@ -34,6 +34,7 @@ hermes gateway status
 hermes-ollama -z "Ответь одним словом: работает"
 hermes mcp list
 hermes mcp test obsidian
+make check-multimedia
 launchctl print "gui/$(id -u)/ai.hermes.obsidian-sync"
 tail -n 100 ~/Library/Logs/hermes/obsidian-sync.log
 ```
@@ -83,11 +84,13 @@ Drive, Contacts, Sheets и Docs. Встроенная документация �
 
 Создание и удаление событий должно оставаться подтверждаемой операцией.
 
-Текущий блокер на Mac mini: найденный Desktop OAuth client
-`216823113834-1h1np9p22e5i96j8q3hh43osqv1enjv8.apps.googleusercontent.com`
-удалён в Google Cloud и возвращает `401 deleted_client`. Для продолжения нужен
-новый OAuth Client ID типа **Desktop app** и новый JSON. Старую ссылку
-авторизации повторно использовать нельзя.
+Текущий Desktop OAuth client:
+`375597971319-9juig1f7kf4h2fpc3uauuvams286hqgm.apps.googleusercontent.com`,
+проект `rapid-airship-499220-t2`. Client живой, но Audience проекта настроен
+как **Internal**, поэтому личный `maxrudin2004@gmail.com` получает
+`403 org_internal`. В Google Auth Platform → Audience нужно выбрать
+**External** и добавить этот Gmail в Test users. После изменения создай новую
+OAuth URL: pending state и authorization URL одноразовые.
 
 ## Todoist MCP
 
@@ -193,3 +196,44 @@ Ollama app должна запускаться при входе пользов�
 не заменяет основной профиль: Telegram по умолчанию продолжает использовать
 основной OpenRouter-профиль, а локальный inference запускается явно через
 `hermes-ollama`.
+
+## Голос, изображения и видео
+
+`setup-macos.sh` настраивает:
+
+- локальное STT через Homebrew `openai-whisper`, модель `base`, язык `ru`;
+- нативное TTS через системный голос macOS `Milena`;
+- преобразование TTS в OGG/Opus через `ffmpeg`, чтобы Telegram показывал
+  результат как voice bubble;
+- `sounddevice` + `numpy` для локального CLI voice mode;
+- image/video analysis через OpenRouter
+  `google/gemini-3-flash-preview`.
+
+Параметры задаются в `config/macos.env`:
+
+```env
+HERMES_STT_MODEL=base
+HERMES_STT_LANGUAGE=ru
+HERMES_TTS_VOICE=Milena
+HERMES_VISION_MODEL=google/gemini-3-flash-preview
+```
+
+Проверенный end-to-end результат на этом Mac mini:
+
+- macOS TTS создал OGG/Opus;
+- локальный Whisper распознал созданную русскую речь;
+- анализ тестового красного PNG вернул `Красный`;
+- анализ тестового синего MP4 вернул `Синий`.
+
+У Mac mini сейчас нет входного аудиоустройства: видны только `Mi Monitor` и
+`Динамики Mac mini` с output channels. Это не мешает распознавать Telegram
+voice messages, потому что они приходят файлами. Для push-to-talk в локальном
+Hermes CLI нужен USB/Bluetooth-микрофон и разрешение macOS на доступ к нему.
+
+Image generation и video generation не включаются автоматически. Это отдельные
+backend-плагины с внешними credentials и расходами:
+
+- image: FAL, OpenAI, xAI или Krea;
+- video: FAL/xAI/Google Veo provider plugin.
+
+`make check-multimedia` показывает их как `[WARN]`, пока backend не выбран.

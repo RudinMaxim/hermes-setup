@@ -16,6 +16,8 @@ source "$SCRIPT_DIR/lib/log.sh"
 command -v hermes >/dev/null || die "hermes is not installed"
 command -v ollama >/dev/null || die "ollama is not installed"
 command -v git >/dev/null || die "git is not installed"
+command -v brew >/dev/null || die "Homebrew is not installed"
+command -v uv >/dev/null || die "uv is not installed"
 
 if [[ ! -f "$ENVFILE" ]]; then
   cp "$EXAMPLE" "$ENVFILE"
@@ -32,6 +34,10 @@ set +a
 : "${OLLAMA_PROFILE:=ollama}"
 : "${OLLAMA_MODEL:=gemma4:e2b}"
 : "${OLLAMA_BASE_URL:=http://127.0.0.1:11434/v1}"
+: "${HERMES_STT_MODEL:=base}"
+: "${HERMES_STT_LANGUAGE:=ru}"
+: "${HERMES_TTS_VOICE:=Milena}"
+: "${HERMES_VISION_MODEL:=google/gemini-3-flash-preview}"
 
 [[ -d "$OBSIDIAN_REPO/.git" ]] || die "Obsidian vault is not a Git repository: $OBSIDIAN_REPO"
 
@@ -85,6 +91,20 @@ hermes_python="$HOME/.hermes/hermes-agent/venv/bin/python"
 "$hermes_python" "$SCRIPT_DIR/macos/configure-hermes-rules.py"
 log_ok "configured Telegram rules for reliable Todoist recovery"
 
+for formula in ffmpeg portaudio openai-whisper; do
+  if brew list --versions "$formula" >/dev/null 2>&1; then
+    log_skip "Homebrew formula $formula is already installed"
+  else
+    brew install "$formula"
+    log_ok "installed Homebrew formula $formula"
+  fi
+done
+
+uv pip install --quiet --python "$hermes_python" sounddevice numpy
+"$hermes_python" "$SCRIPT_DIR/macos/configure-multimedia.py" \
+  --tts-script "$SCRIPT_DIR/macos/macos-say-tts.sh"
+log_ok "configured local Russian STT, native macOS TTS, and multimodal analysis"
+
 if pgrep -f '[o]llama serve' >/dev/null 2>&1; then
   log_skip "Ollama is already running"
 else
@@ -93,8 +113,10 @@ else
 fi
 
 hermes gateway install >/dev/null
-hermes gateway start >/dev/null
+hermes gateway restart >/dev/null
 log_ok "Hermes Telegram gateway is installed and running"
 
 bash "$SCRIPT_DIR/macos/install-obsidian-sync.sh"
+bash "$SCRIPT_DIR/macos/check-multimedia.sh" \
+  || log_warn "one or more multimedia checks need attention"
 log_ok "native macOS setup complete"
