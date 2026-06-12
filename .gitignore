@@ -2,10 +2,13 @@
 config/.env
 config/mcp.toml
 config/gateways.toml
+config/macos.env
 
 # Test artifacts
 tests/.bats-tmp/
 *.log
+__pycache__/
+*.pyc
 
 # Editors
 .vscode/

@@ -2,6 +2,12 @@
 
 Идемпотентный bash-установщик [Hermes Agent](https://hermes-agent.nousresearch.com) для Linux VPS. Hermes запускается в Docker, а MCP-серверы и Telegram gateway включаются через конфиги.
 
+Для выделенного персонального Mac mini есть отдельный нативный контур:
+[`docs/macos-personal-host.md`](docs/macos-personal-host.md). Он использует
+Hermes `launchd`, локальный профиль Ollama и безопасную Git-синхронизацию
+Obsidian vault, официальный Todoist MCP и scoped filesystem MCP; Linux/Docker
+setup при этом не меняется.
+
 ## Что делает репозиторий
 
 - Подготавливает Debian/Ubuntu VPS: отдельный пользователь `hermes`, вход по SSH-ключу, UFW, fail2ban, unattended-upgrades.
