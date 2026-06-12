@@ -86,11 +86,22 @@ Drive, Contacts, Sheets и Docs. Встроенная документация �
 
 Текущий Desktop OAuth client:
 `375597971319-9juig1f7kf4h2fpc3uauuvams286hqgm.apps.googleusercontent.com`,
-проект `rapid-airship-499220-t2`. Client живой, но Audience проекта настроен
-как **Internal**, поэтому личный `maxrudin2004@gmail.com` получает
-`403 org_internal`. В Google Auth Platform → Audience нужно выбрать
-**External** и добавить этот Gmail в Test users. После изменения создай новую
-OAuth URL: pending state и authorization URL одноразовые.
+проект `rapid-airship-499220-t2`.
+
+Рабочее состояние на этом Mac mini:
+
+- Audience: **External**;
+- Publishing status: **Testing**;
+- test user: `maxrudin2004@gmail.com`;
+- token: `~/.hermes/google_token.json`;
+- `setup.py --check-live`: `LIVE_CHECK_OK`.
+
+Публиковать приложение не требуется: для персонального использования достаточно
+режима Testing и добавленного test user. Ошибка `403 org_internal` означает, что
+Audience снова стал Internal либо используется OAuth client из другого проекта.
+После изменения Audience всегда создавай новую OAuth URL: pending state,
+authorization code и URL одноразовые. Полные callback URL и authorization codes
+не записывай в Git.
 
 ## Todoist MCP
 
