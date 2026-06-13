@@ -38,8 +38,12 @@ set +a
 : "${HERMES_STT_LANGUAGE:=ru}"
 : "${HERMES_TTS_VOICE:=Milena}"
 : "${HERMES_VISION_MODEL:=google/gemini-3-flash-preview}"
+: "${HERMES_PLAYWRIGHT_MCP_VERSION:=0.0.76}"
 
 [[ -d "$OBSIDIAN_REPO/.git" ]] || die "Obsidian vault is not a Git repository: $OBSIDIAN_REPO"
+
+bash "$SCRIPT_DIR/macos/install-hermes-wrapper.sh"
+hash -r
 
 hermes_env=$(hermes config env-path)
 if grep -q '^OBSIDIAN_VAULT_PATH=' "$hermes_env"; then
@@ -84,6 +88,17 @@ if ! hermes mcp list 2>/dev/null | grep -qE '^[[:space:]]*todoist[[:space:]]'; t
   log_ok "configured official Todoist MCP"
 else
   log_skip "Todoist MCP is already configured"
+fi
+
+if ! hermes mcp list 2>/dev/null | grep -qE '^[[:space:]]*playwright[[:space:]]'; then
+  printf 'y\n' | hermes mcp add playwright \
+    --command npx \
+    --args -y "@playwright/mcp@$HERMES_PLAYWRIGHT_MCP_VERSION" \
+    --browser chrome \
+    --user-data-dir "$HOME/.hermes/playwright-profile"
+  log_ok "configured persistent Playwright MCP"
+else
+  log_skip "Playwright MCP is already configured"
 fi
 
 hermes_python="$HOME/.hermes/hermes-agent/venv/bin/python"

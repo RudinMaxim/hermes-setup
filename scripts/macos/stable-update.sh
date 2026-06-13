@@ -49,6 +49,8 @@ case "$MODE" in
       "$previous_version" "${previous_commit:0:12}"
 
     hermes update --backup --yes --branch "$HERMES_UPDATE_BRANCH"
+    bash "$SCRIPT_DIR/install-hermes-wrapper.sh"
+    hash -r
     hermes gateway restart
 
     if "$SCRIPT_DIR/health-check.sh" --no-notify --core; then
@@ -63,6 +65,8 @@ case "$MODE" in
       git -C "$HERMES_REPO" reset --hard "$previous_commit"
       uv pip install --python "$HERMES_REPO/venv/bin/python" \
         -e "$HERMES_REPO[all]"
+      bash "$SCRIPT_DIR/install-hermes-wrapper.sh"
+      hash -r
       hermes gateway restart
       printf '[WARN] rollback completed; inspect health-check logs before retrying\n' >&2
       exit 1

@@ -33,8 +33,10 @@ docker exec -it hermes hermes chat
 > подключение.
 
 Агент впишет сервер в `$HERMES_HOME/config.yaml` (на текущем образе это
-`/opt/data/config.yaml`). В текущей версии Hermes команды `config reload` нет:
-после ручной правки используй `hermes config check` и перезапуск контейнера.
+`/opt/data/config.yaml`). После ручной правки используй `hermes config check`.
+Для уже работающего gateway выполни `/reload-mcp` в чате или перезапусти
+контейнер: MCP tools фиксируются при создании agent session и не появляются в
+старом tool list только от изменения YAML.
 
 ## Как добавить вручную через config.yaml
 

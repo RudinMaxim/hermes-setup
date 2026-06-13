@@ -9,13 +9,17 @@ from pathlib import Path
 import yaml
 
 
-RULE_MARKER = "[hermes-setup mac-mini rules]"
-RULE_TEXT = """[hermes-setup mac-mini rules]
+RULE_MARKER = "[hermes-setup mac-mini rules v2]"
+RULE_TEXT = """[hermes-setup mac-mini rules v2]
 Todoist MCP:
 - For a general overview, call get-overview without projectId.
 - For a specific project, call find-projects first and use only the returned real ID.
 - INVALID_ARGUMENT_VALUE is an argument error, not an OAuth failure.
 - If the MCP circuit breaker opens, wait for its roughly 60-second cooldown and retry once. Do not ask for OAuth unless the server reports invalid_grant or needs_reauth.
+- A short-lived access token is normal because Hermes refreshes it automatically. Never force OAuth only because the access token is about one hour old.
+- Use `hermes mcp login todoist --force` only for invalid_grant, needs_reauth, or an intentional account/scope change. The hermes-setup wrapper restores previous credentials if the new flow fails.
+MCP lifecycle:
+- After adding or changing an MCP server, run /reload-mcp for the active gateway session or restart the gateway before concluding that the agent cannot see its tools.
 """
 
 

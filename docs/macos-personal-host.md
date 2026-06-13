@@ -11,6 +11,7 @@
 - команда `hermes-ollama` использует локальную модель Ollama;
 - Todoist подключён к официальному remote MCP через OAuth;
 - Obsidian доступен через официальный filesystem MCP, ограниченный vault;
+- Playwright MCP использует отдельный постоянный Chrome profile;
 - Obsidian vault находится в отдельном Git-репозитории;
 - `launchd` каждые 5 минут коммитит локальные изменения, подтягивает remote
   через rebase и отправляет результат обратно.
@@ -34,6 +35,7 @@ hermes gateway status
 hermes-ollama -z "Ответь одним словом: работает"
 hermes mcp list
 hermes mcp test obsidian
+hermes mcp test playwright
 make check-multimedia
 launchctl print "gui/$(id -u)/ai.hermes.obsidian-sync"
 tail -n 100 ~/Library/Logs/hermes/obsidian-sync.log
@@ -83,9 +85,10 @@ make update-macos
 
 `check-update-macos` не меняет установку. `update-macos` требует чистый Hermes
 checkout, запоминает текущие version/commit, запускает штатный
-`hermes update --backup`, перезапускает gateway и проверяет core-сервисы. Если
-gateway или Ollama после обновления не работают, скрипт автоматически возвращает
-прежний commit, переустанавливает зависимости и снова запускает gateway.
+`hermes update --backup`, повторно устанавливает managed safety wrapper,
+перезапускает gateway и проверяет core-сервисы. Если gateway или Ollama после
+обновления не работают, скрипт автоматически возвращает прежний commit,
+переустанавливает зависимости и wrapper, затем снова запускает gateway.
 Временный сбой внешнего Todoist/Google/Telegram не вызывает откат, но
 показывается последующим полным health-check.
 
@@ -165,6 +168,10 @@ authorization code и URL одноразовые. Полные callback URL и a
 https://ai.todoist.net/mcp
 ```
 
+`setup-macos.sh` устанавливает managed wrapper
+`~/.local/bin/hermes`. Он не меняет upstream checkout и переживает штатные
+обновления Hermes.
+
 Первичная авторизация:
 
 ```bash
@@ -179,6 +186,21 @@ OAuth открывается в браузере. API token в `config/macos.env
 OAuth credentials хранятся в `~/.hermes/mcp-tokens/`; access token обновляется
 через refresh token автоматически. Повторный браузерный вход нужен только после
 отзыва доступа или ошибки `invalid_grant`, а не после обычного сетевого сбоя.
+Access token может жить около часа — это штатно и не означает, что интеграция
+отключилась.
+
+При существующем token-файле `hermes mcp login todoist` через managed wrapper
+выполняет безопасный `mcp test`: проверяет соединение и позволяет SDK обновить
+access token, не удаляя refresh token. Для смены аккаунта/scopes или реального
+`invalid_grant` используй:
+
+```bash
+hermes mcp login todoist --force
+```
+
+Перед forced login wrapper сохраняет token, client registration и OAuth
+metadata. Если callback отменён, истёк по таймауту или завершился ошибкой,
+прежний комплект восстанавливается автоматически.
 
 Hermes имеет встроенный circuit breaker: после трёх последовательных ошибок
 Todoist блокируется примерно на 60 секунд, затем следующий вызов автоматически
@@ -205,6 +227,45 @@ hermes mcp test todoist
 ```bash
 hermes gateway restart
 ```
+
+## Playwright MCP
+
+`setup-macos.sh` системно регистрирует официальный `@playwright/mcp` с
+постоянным профилем:
+
+```text
+~/.hermes/playwright-profile
+```
+
+Это отдельный Chrome profile: он не блокируется обычным запущенным Chrome и
+сохраняет авторизацию между рестартами MCP. Версия пакета закреплена переменной
+`HERMES_PLAYWRIGHT_MCP_VERSION` в `config/macos.env`.
+
+После добавления или изменения MCP уже работающий agent должен перечитать
+tools. Используй `/reload-mcp` в Telegram/CLI chat либо:
+
+```bash
+hermes gateway restart
+```
+
+Проверка:
+
+```bash
+hermes mcp test playwright
+```
+
+## Gateway status на macOS
+
+Источником истины для LaunchAgent является domain-scoped команда:
+
+```bash
+launchctl print "gui/$(id -u)/ai.hermes.gateway"
+```
+
+Legacy-вызов `launchctl list ai.hermes.gateway` на новых macOS может сообщить,
+что service не загружен, хотя job работает в `gui/<uid>`. Managed wrapper
+сверяет `hermes gateway status` с `launchctl print` и исправляет этот ложный
+negative, не меняя upstream Hermes checkout.
 
 ## Obsidian и Git
 

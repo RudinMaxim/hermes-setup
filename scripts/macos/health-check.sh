@@ -73,6 +73,14 @@ else
   fail "Hermes gateway is not running"
 fi
 
+wrapper_source="$SCRIPT_DIR/hermes-wrapper.sh"
+wrapper_target="$HOME/.local/bin/hermes"
+if [[ -x "$wrapper_target" ]] && cmp -s "$wrapper_source" "$wrapper_target"; then
+  pass "Hermes safety wrapper"
+else
+  fail "Hermes safety wrapper is missing or was replaced"
+fi
+
 ollama_json=$(curl -fsS --max-time 5 http://127.0.0.1:11434/api/tags 2>/dev/null)
 if [[ -z "$ollama_json" ]]; then
   fail "Ollama API is unavailable"
@@ -93,6 +101,12 @@ if (( ! CORE_ONLY )); then
     pass "Obsidian MCP"
   else
     fail "Obsidian MCP failed"
+  fi
+
+  if hermes mcp test playwright >/dev/null 2>&1; then
+    pass "Playwright MCP"
+  else
+    fail "Playwright MCP failed"
   fi
 
   google_setup="$HOME/.hermes/hermes-agent/skills/productivity/google-workspace/scripts/setup.py"
