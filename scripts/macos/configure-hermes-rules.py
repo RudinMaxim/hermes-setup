@@ -9,18 +9,34 @@ from pathlib import Path
 import yaml
 
 
-RULE_MARKER = "[hermes-setup mac-mini rules v2]"
-RULE_TEXT = """[hermes-setup mac-mini rules v2]
+RULE_MARKER = "[hermes-setup mac-mini rules v3]"
+LEGACY_RULE_MARKERS = (
+    "[hermes-setup mac-mini rules v2]",
+)
+RULE_TEXT = """[hermes-setup mac-mini rules v3]
 Todoist MCP:
 - For a general overview, call get-overview without projectId.
 - For a specific project, call find-projects first and use only the returned real ID.
-- INVALID_ARGUMENT_VALUE is an argument error, not an OAuth failure.
-- If the MCP circuit breaker opens, wait for its roughly 60-second cooldown and retry once. Do not ask for OAuth unless the server reports invalid_grant or needs_reauth.
+- For Inbox processing, find the real Inbox project, then call find-tasks with that project ID. Labels and overview are optional and must not block task processing.
+- Omit optional arguments unless they are needed. Never send null, an empty string, a guessed ID, or a guessed cursor. Pass cursor only when the preceding response returned a non-empty cursor.
+- INVALID_ARGUMENT_VALUE identifies a bad argument. Read the named argument from the error, remove or correct it, and do not repeat the same call with the same arguments.
+- One tool argument error does not mean Todoist is unavailable. Continue with narrower calls that do not need the failing optional data.
+- If the MCP circuit breaker opens, wait for its roughly 60-second cooldown and retry once with corrected arguments. Only report an outage if that corrected retry also fails with a connection, timeout, or server error.
 - A short-lived access token is normal because Hermes refreshes it automatically. Never force OAuth only because the access token is about one hour old.
 - Use `hermes mcp login todoist --force` only for invalid_grant, needs_reauth, or an intentional account/scope change. The hermes-setup wrapper restores previous credentials if the new flow fails.
 MCP lifecycle:
 - After adding or changing an MCP server, run /reload-mcp for the active gateway session or restart the gateway before concluding that the agent cannot see its tools.
 """
+
+
+def remove_managed_rules(prompt: str) -> str:
+    markers = (RULE_MARKER, *LEGACY_RULE_MARKERS)
+    starts = [prompt.find(marker) for marker in markers if marker in prompt]
+    if not starts:
+        return prompt.rstrip()
+
+    start = min(starts)
+    return prompt[:start].rstrip()
 
 
 def main() -> None:
@@ -39,7 +55,8 @@ def main() -> None:
         current = str(prompts.get(chat_id) or "")
         if RULE_MARKER in current:
             continue
-        prompts[chat_id] = f"{current.rstrip()}\n\n{RULE_TEXT}".strip()
+        base = remove_managed_rules(current)
+        prompts[chat_id] = f"{base}\n\n{RULE_TEXT}".strip()
 
     config_path.write_text(
         yaml.safe_dump(config, sort_keys=False, allow_unicode=True),
