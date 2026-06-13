@@ -9,11 +9,12 @@ from pathlib import Path
 import yaml
 
 
-RULE_MARKER = "[hermes-setup mac-mini rules v3]"
+RULE_MARKER = "[hermes-setup mac-mini rules v4]"
 LEGACY_RULE_MARKERS = (
+    "[hermes-setup mac-mini rules v3]",
     "[hermes-setup mac-mini rules v2]",
 )
-RULE_TEXT = """[hermes-setup mac-mini rules v3]
+RULE_TEXT = """[hermes-setup mac-mini rules v4]
 Todoist MCP:
 - For a general overview, call get-overview without projectId.
 - For a specific project, call find-projects first and use only the returned real ID.
@@ -26,6 +27,10 @@ Todoist MCP:
 - Use `hermes mcp login todoist --force` only for invalid_grant, needs_reauth, or an intentional account/scope change. The hermes-setup wrapper restores previous credentials if the new flow fails.
 MCP lifecycle:
 - After adding or changing an MCP server, run /reload-mcp for the active gateway session or restart the gateway before concluding that the agent cannot see its tools.
+Obsidian:
+- For Obsidian vault administration, load the `obsidian-para` skill and follow it instead of the built-in filesystem-first Obsidian workflow.
+- Access vault content only through the scoped MCP server named `obsidian`. Do not use terminal, generic file tools, or direct filesystem paths as a fallback.
+- If the `obsidian` MCP is unavailable, report the limitation and do not bypass its scope.
 """
 
 

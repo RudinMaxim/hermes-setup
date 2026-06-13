@@ -103,6 +103,15 @@ if (( ! CORE_ONLY )); then
     fail "Obsidian MCP failed"
   fi
 
+  obsidian_skill_source="$REPO_ROOT/skills/obsidian-para/SKILL.md"
+  obsidian_skill_target="$HOME/.hermes/skills/obsidian-para/SKILL.md"
+  if [[ -f "$obsidian_skill_target" ]] \
+    && cmp -s "$obsidian_skill_source" "$obsidian_skill_target"; then
+    pass "Obsidian PARA skill"
+  else
+    fail "Obsidian PARA skill is missing or outdated"
+  fi
+
   if hermes mcp test playwright >/dev/null 2>&1; then
     pass "Playwright MCP"
   else

@@ -1,0 +1,9 @@
+interface:
+  display_name: "Obsidian PARA"
+  short_description: "Организация Obsidian-хранилища по PARA"
+  default_prompt: "Use $obsidian-para to classify and organize my Obsidian notes through the scoped Obsidian MCP."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "obsidian"
+      description: "Scoped filesystem access to the Obsidian vault"

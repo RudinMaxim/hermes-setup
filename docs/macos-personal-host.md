@@ -288,8 +288,25 @@ negative, не меняя upstream Hermes checkout.
 Hermes использует `OBSIDIAN_VAULT_PATH` из `~/.hermes/.env`. Для локального
 vault setup также добавляет официальный
 `@modelcontextprotocol/server-filesystem`, которому передаётся только путь
-vault. Встроенный `obsidian` skill задаёт правила работы с Markdown, а MCP
-ограничивает filesystem surface одним репозиторием.
+vault. MCP всё ещё работает с файлами, но его разрешённая область ограничена
+одним vault. Это уже, чем прямые Hermes file tools, поэтому агент не должен
+обходить MCP через terminal, generic file tools или абсолютный путь.
+
+`setup-macos.sh` устанавливает локальный skill `obsidian-para` в
+`~/.hermes/skills/obsidian-para`. Он классифицирует заметки по реальным корням
+vault:
+
+- `0. Inbox` — необработанный входящий материал;
+- `1. Projects` — активные результаты с условием завершения;
+- `2. Areas` — постоянные сферы ответственности;
+- `3. Resources` — справочные материалы и темы;
+- `4. Archive` — неактивные материалы.
+
+Skill требует использовать только MCP `obsidian`, сохранять wikilinks и
+frontmatter, показывать план перед несколькими перемещениями и не удалять
+данные без явного подтверждения. Системный Telegram prompt направляет запросы
+на администрирование vault в этот skill вместо встроенного filesystem-first
+Obsidian skill.
 
 Filesystem MCP устанавливается из официального npm-пакета:
 `@modelcontextprotocol/server-filesystem`.

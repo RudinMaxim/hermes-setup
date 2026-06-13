@@ -103,8 +103,17 @@ fi
 
 hermes_python="$HOME/.hermes/hermes-agent/venv/bin/python"
 [[ -x "$hermes_python" ]] || die "Hermes Python venv not found: $hermes_python"
+
+skills_config="$REPO_ROOT/config/skills.toml"
+[[ -f "$skills_config" ]] || skills_config="$REPO_ROOT/config/skills.toml.example"
+"$hermes_python" "$SCRIPT_DIR/macos/install-local-skills.py" \
+  --repo-root "$REPO_ROOT" \
+  --config "$skills_config" \
+  --hermes-home "$HOME/.hermes"
+log_ok "installed enabled local Hermes skills"
+
 "$hermes_python" "$SCRIPT_DIR/macos/configure-hermes-rules.py"
-log_ok "configured Telegram rules for reliable Todoist recovery"
+log_ok "configured Telegram rules for Todoist and Obsidian workflows"
 
 for formula in ffmpeg portaudio openai-whisper; do
   if brew list --versions "$formula" >/dev/null 2>&1; then

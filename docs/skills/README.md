@@ -227,3 +227,18 @@ stabilize = true
 Когда `stabilize = true`, `setup-skills.sh` запускает
 `scripts/stabilize-google-workspace.sh`. Если OAuth ещё не выполнен через Hermes
 CLI, скрипт напечатает предупреждение и не будет ломать весь setup.
+
+## Native macOS
+
+`setup-macos.sh` устанавливает enabled local skills из `config/skills.toml`
+или, если локального файла нет, из `config/skills.toml.example` в:
+
+```text
+~/.hermes/skills/<name>/
+```
+
+Установщик идемпотентен и сохраняет заменённую версию в
+`~/.hermes/backups/skills/<name>/<timestamp>/`.
+
+`obsidian_para` включён по умолчанию. Skill `obsidian-para` организует vault по
+PARA и требует использовать scoped MCP `obsidian`, не прямые file tools.
