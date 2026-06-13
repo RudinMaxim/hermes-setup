@@ -9,12 +9,13 @@ from pathlib import Path
 import yaml
 
 
-RULE_MARKER = "[hermes-setup mac-mini rules v4]"
+RULE_MARKER = "[hermes-setup mac-mini rules v5]"
 LEGACY_RULE_MARKERS = (
+    "[hermes-setup mac-mini rules v4]",
     "[hermes-setup mac-mini rules v3]",
     "[hermes-setup mac-mini rules v2]",
 )
-RULE_TEXT = """[hermes-setup mac-mini rules v4]
+RULE_TEXT = """[hermes-setup mac-mini rules v5]
 Todoist MCP:
 - For a general overview, call get-overview without projectId.
 - For a specific project, call find-projects first and use only the returned real ID.
@@ -31,6 +32,11 @@ Obsidian:
 - For Obsidian vault administration, load the `obsidian-para` skill and follow it instead of the built-in filesystem-first Obsidian workflow.
 - Access vault content only through the scoped MCP server named `obsidian`. Do not use terminal, generic file tools, or direct filesystem paths as a fallback.
 - If the `obsidian` MCP is unavailable, report the limitation and do not bypass its scope.
+Calendar planning:
+- For day planning, weekly planning, time blocking, travel-aware errands, or scheduling Todoist work, load both `google-calendar-os` and `todoist-os`.
+- Todoist owns actions; Google Calendar owns fixed commitments, travel, appointments, and protected execution blocks.
+- Use Todoist context and estimate labels to place phone tasks in safe passenger/waiting windows, physical tasks along an existing route, and deep work in protected desk blocks.
+- Never schedule interactive tasks while the user is driving or cycling. Require confirmation before creating or deleting Calendar events.
 """
 
 

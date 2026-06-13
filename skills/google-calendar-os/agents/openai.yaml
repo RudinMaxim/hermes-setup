@@ -1,0 +1,9 @@
+interface:
+  display_name: "Google Calendar OS"
+  short_description: "Контекстное планирование Calendar и Todoist"
+  default_prompt: "Use $google-calendar-os to plan my day from Google Calendar and Todoist with context, route, and energy optimization."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "todoist"
+      description: "Todoist tasks, estimates, priorities, and context labels"

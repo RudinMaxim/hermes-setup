@@ -50,9 +50,10 @@ class ConfigureHermesRulesTest(unittest.TestCase):
             self.assertEqual(first, second)
             self.assertIn("Keep this custom prompt.", prompt)
             self.assertNotIn("rules v2", prompt)
-            self.assertEqual(prompt.count("[hermes-setup mac-mini rules v4]"), 1)
+            self.assertEqual(prompt.count("[hermes-setup mac-mini rules v5]"), 1)
             self.assertIn("Never send null, an empty string", prompt)
             self.assertIn("load the `obsidian-para` skill", prompt)
+            self.assertIn("load both `google-calendar-os` and `todoist-os`", prompt)
 
 
 if __name__ == "__main__":

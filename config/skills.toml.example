@@ -19,3 +19,9 @@ enabled = true
 type = "local"
 source = "skills/obsidian-para"
 description = "Administer the Obsidian vault through scoped MCP using PARA"
+
+[google_calendar_os]
+enabled = true
+type = "local"
+source = "skills/google-calendar-os"
+description = "Plan Google Calendar from Todoist contexts, routes, and energy"

@@ -112,6 +112,15 @@ if (( ! CORE_ONLY )); then
     fail "Obsidian PARA skill is missing or outdated"
   fi
 
+  calendar_skill_source="$REPO_ROOT/skills/google-calendar-os/SKILL.md"
+  calendar_skill_target="$HOME/.hermes/skills/google-calendar-os/SKILL.md"
+  if [[ -f "$calendar_skill_target" ]] \
+    && cmp -s "$calendar_skill_source" "$calendar_skill_target"; then
+    pass "Google Calendar OS skill"
+  else
+    fail "Google Calendar OS skill is missing or outdated"
+  fi
+
   if hermes mcp test playwright >/dev/null 2>&1; then
     pass "Playwright MCP"
   else
