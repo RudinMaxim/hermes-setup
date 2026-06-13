@@ -3,6 +3,7 @@ config/.env
 config/mcp.toml
 config/gateways.toml
 config/macos.env
+config/agent-profile.yaml
 
 # Test artifacts
 tests/.bats-tmp/
