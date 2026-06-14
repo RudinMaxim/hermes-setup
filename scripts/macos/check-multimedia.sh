@@ -60,17 +60,23 @@ else
 fi
 
 if "$HERMES_PYTHON" - <<'PY'
+from dotenv import load_dotenv
+from pathlib import Path
 from tools.image_generation_tool import check_image_generation_requirements
+load_dotenv(Path.home() / ".hermes" / ".env")
 raise SystemExit(0 if check_image_generation_requirements() else 1)
 PY
 then
   ok "image generation backend is configured"
 else
-  warn "image generation is disabled: configure FAL, OpenAI, xAI, or Krea"
+  warn "image generation is disabled: configure a supported provider plugin"
 fi
 
 if "$HERMES_PYTHON" - <<'PY'
+from dotenv import load_dotenv
+from pathlib import Path
 from tools.video_generation_tool import check_video_generation_requirements
+load_dotenv(Path.home() / ".hermes" / ".env")
 raise SystemExit(0 if check_video_generation_requirements() else 1)
 PY
 then

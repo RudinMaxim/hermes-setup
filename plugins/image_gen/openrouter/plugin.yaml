@@ -1,0 +1,7 @@
+name: openrouter-image
+version: 1.0.0
+description: "OpenRouter image generation through multimodal Chat Completions."
+author: hermes-setup
+kind: backend
+requires_env:
+  - OPENROUTER_API_KEY

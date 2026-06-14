@@ -38,6 +38,8 @@ set +a
 : "${HERMES_STT_LANGUAGE:=ru}"
 : "${HERMES_TTS_VOICE:=Milena}"
 : "${HERMES_VISION_MODEL:=google/gemini-3-flash-preview}"
+: "${HERMES_OPENROUTER_IMAGE_MODEL:=google/gemini-2.5-flash-image}"
+: "${HERMES_OPENROUTER_VIDEO_MODEL:=google/veo-3.1-lite}"
 : "${HERMES_PLAYWRIGHT_MCP_VERSION:=0.0.76}"
 
 [[ -d "$OBSIDIAN_REPO/.git" ]] || die "Obsidian vault is not a Git repository: $OBSIDIAN_REPO"
@@ -127,7 +129,12 @@ done
 uv pip install --quiet --python "$hermes_python" sounddevice numpy
 "$hermes_python" "$SCRIPT_DIR/macos/configure-multimedia.py" \
   --tts-script "$SCRIPT_DIR/macos/macos-say-tts.sh"
-log_ok "configured local Russian STT, native macOS TTS, and multimodal analysis"
+"$hermes_python" "$SCRIPT_DIR/macos/install-openrouter-media.py" \
+  --repo-root "$REPO_ROOT" \
+  --hermes-home "$HOME/.hermes" \
+  --image-model "$HERMES_OPENROUTER_IMAGE_MODEL" \
+  --video-model "$HERMES_OPENROUTER_VIDEO_MODEL"
+log_ok "configured web, speech, analysis, and OpenRouter media generation"
 
 if pgrep -f '[o]llama serve' >/dev/null 2>&1; then
   log_skip "Ollama is already running"
@@ -144,4 +151,6 @@ bash "$SCRIPT_DIR/macos/install-obsidian-sync.sh"
 bash "$SCRIPT_DIR/macos/install-runtime-jobs.sh"
 bash "$SCRIPT_DIR/macos/check-multimedia.sh" \
   || log_warn "one or more multimedia checks need attention"
+bash "$SCRIPT_DIR/macos/check-web-media.sh" \
+  || log_warn "one or more web/media checks need attention"
 log_ok "native macOS setup complete"

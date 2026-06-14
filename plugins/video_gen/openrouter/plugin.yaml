@@ -1,0 +1,7 @@
+name: openrouter-video
+version: 1.0.0
+description: "OpenRouter async text-to-video and image-to-video backend."
+author: hermes-setup
+kind: backend
+requires_env:
+  - OPENROUTER_API_KEY

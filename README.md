@@ -104,6 +104,7 @@ hermes, MCP и gateway, и обновляет npm-пакеты включённ�
 - [`docs/mcp/README.md`](docs/mcp/README.md) — как подключать MCP-интеграции вручную через агента, + файл на каждый сервер.
 - [`docs/skills/README.md`](docs/skills/README.md) — настройка локальных и встроенных Hermes skills.
 - [`docs/identity/README.md`](docs/identity/README.md) — SOUL.md, USER.md, MEMORY.md и анкета профиля ассистента.
+- [`docs/web-media.md`](docs/web-media.md) — глобальный веб-поиск, анализ и генерация медиа через OpenRouter.
 - [`docs/gateways/telegram.md`](docs/gateways/telegram.md) — настройка Telegram bot, user ID, privacy mode и стабильный Google Drive/Docs через Workspace skill.
 - [`docs/superpowers/specs/2026-05-30-hermes-setup-design.md`](docs/superpowers/specs/2026-05-30-hermes-setup-design.md) — исходный design rationale.
 
