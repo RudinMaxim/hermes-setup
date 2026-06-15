@@ -10,6 +10,7 @@ teardown() {
   rm -f "$REPO_ROOT/config/skills.toml"
   rm -rf "$REPO_ROOT/skills/broken"
   rm -rf /tmp/bin-stub /tmp/hermes-home /tmp/stabilized-google-workspace
+  rm -f /tmp/.skills-root-exec
 }
 
 make_docker_stub() {
@@ -31,6 +32,10 @@ case "$1 $2" in
       "python3 -") "$@" ;;
       *) echo "exec-i-stub: $*" ;;
     esac ;;
+  "exec -u")
+    shift 4
+    printf '%s\n' "$*" >>/tmp/.skills-root-exec
+    ;;
   "cp"*)
     src="$2"
     dest="$3"
@@ -95,6 +100,17 @@ TOML
   [ "$status" -eq 0 ]
   [ -f /tmp/hermes-home/skills/project_memory/SKILL.md ]
   [[ "$output" == *"installed skill.project_memory"* ]]
+}
+
+@test "setup-skills.sh normalizes staged ownership after docker copy" {
+  cp "$REPO_ROOT/config/skills.toml.example" "$REPO_ROOT/config/skills.toml"
+  sed -i '/^\[project_memory\]/,/^$/ s|^enabled = false$|enabled = true|' "$REPO_ROOT/config/skills.toml"
+  make_docker_stub
+
+  run env PATH="/tmp/bin-stub:$PATH" bash "$SCRIPTS/setup-skills.sh"
+
+  [ "$status" -eq 0 ]
+  grep -q 'chown -R hermes:hermes /tmp/hermes-home/skills/.project_memory.incoming-' /tmp/.skills-root-exec
 }
 
 @test "setup-skills.sh skips unchanged local skill on second run" {

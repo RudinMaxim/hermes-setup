@@ -320,6 +320,7 @@ deploy_local_skill() {
 
   prepare_container_stage "$hermes_home" "$skill" "$staged" || return 1
   docker cp "$src/." "hermes:$staged/" || return 1
+  docker exec -u root hermes chown -R hermes:hermes "$staged" || return 1
   finalize_container_stage "$hermes_home" "$skill" "$staged"
 }
 
