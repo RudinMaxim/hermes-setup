@@ -22,6 +22,8 @@ source "$SCRIPT_DIR/lib/toml.sh"
 source "$SCRIPT_DIR/lib/telegram.sh"
 # shellcheck source=lib/prompt.sh
 source "$SCRIPT_DIR/lib/prompt.sh"
+# shellcheck source=lib/voice.sh
+source "$SCRIPT_DIR/lib/voice.sh"
 
 for arg in "$@"; do
   case "$arg" in
@@ -229,6 +231,9 @@ main() {
 
   if gateway_enabled telegram; then
     ensure_telegram
+    # Verify/repair the Telegram voice (STT) path once the gateway is up. Never
+    # fatal: a voice problem must not take down text messaging.
+    ensure_voice_stt || log_warn "voice STT check skipped after an error"
   else
     ensure_telegram_off
   fi

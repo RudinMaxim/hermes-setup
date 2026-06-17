@@ -1,4 +1,4 @@
-.PHONY: help setup-macos health-macos check-update-macos update-macos check-multimedia check-web-media test test-unit test-integration test-image clean update
+.PHONY: help setup-macos health-macos check-update-macos update-macos check-multimedia check-web-media check-voice test test-unit test-integration test-image clean update
 
 help:
 	@echo "update          - git pull + re-sync hermes/mcp/gateway (run on the VPS as hermes)"
@@ -8,6 +8,7 @@ help:
 	@echo "update-macos    - backup, update, restart, and verify native Hermes"
 	@echo "check-multimedia - verify native speech, vision, and media dependencies"
 	@echo "check-web-media  - verify live web search and OpenRouter media providers"
+	@echo "check-voice      - verify Telegram voice STT readiness (run on the VPS as hermes)"
 	@echo "test            - run unit + integration tests"
 	@echo "test-unit       - run bats unit tests on host"
 	@echo "test-integration - run integration tests in Docker sandbox"
@@ -34,6 +35,9 @@ check-multimedia:
 
 check-web-media:
 	bash scripts/macos/check-web-media.sh
+
+check-voice:
+	bash scripts/vps/check-voice.sh
 
 test: test-unit test-integration
 

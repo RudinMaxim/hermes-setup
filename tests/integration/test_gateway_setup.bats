@@ -10,13 +10,17 @@ STATUS=/tmp/.gw-stub-status
 setup() {
   id hermes &>/dev/null || useradd -m -s /bin/bash hermes
   mkdir -p "$STUB"
-  rm -f "$STATE" "$STATUS" /tmp/.gw-status-checks
+  rm -f "$STATE" "$STATUS" /tmp/.gw-status-checks \
+        /tmp/.gw-stt-sha /tmp/.gw-whisper-link /tmp/.gw-stt-config
 
   # docker stub: models PID-1 command via $STATE, reports container running.
   cat >"$STUB/docker" <<'DOCKER'
 #!/usr/bin/env bash
 STATE=/tmp/.gw-stub-cmd
 STATUS=/tmp/.gw-stub-status
+STT_SHA=/tmp/.gw-stt-sha
+WHISPER_LINK=/tmp/.gw-whisper-link
+STT_CFG=/tmp/.gw-stt-config
 case "$*" in
   "ps -a --format {{.Names}}") echo hermes ;;
   "inspect -f "*"State.Status"*)  [[ -f "$STATUS" ]] && cat "$STATUS" || echo running ;;
@@ -27,6 +31,15 @@ case "$*" in
   "exec hermes hermes gateway status"*) echo status >> /tmp/.gw-status-checks; exit 0 ;;
   "exec hermes sh -lc test -f /opt/data/google_token.json"*) [[ "${GOOGLE_TOKEN_PRESENT:-0}" = "1" ]] && exit 0 || exit 1 ;;
   "exec -u root hermes sh -lc mkdir -p /home/hermes/.hermes && ln -sf /opt/data/google_token.json /home/hermes/.hermes/google_token.json && chown -h hermes:hermes /home/hermes/.hermes/google_token.json"*) echo "$*" > /tmp/.gw-token-link; exit 0 ;;
+  # --- voice STT path (lib/voice.sh) -----------------------------------------
+  *OPENROUTER_API_KEY*) [[ "${OPENROUTER_KEY_MISSING:-0}" = "1" ]] && exit 1 || exit 0 ;;
+  *"command -v ffmpeg"*) exit 0 ;;
+  "cp "*"openrouter-stt.py"*) sha256sum "$2" | awk '{print $1}' > "$STT_SHA"; exit 0 ;;
+  *sha256sum*openrouter-stt.py*) [[ -f "$STT_SHA" ]] && cat "$STT_SHA"; exit 0 ;;
+  *"grep -q "*"openrouter-stt.py"*) [[ -f "$WHISPER_LINK" ]] && exit 0 || exit 1 ;;
+  *printf*whisper*) touch "$WHISPER_LINK"; exit 0 ;;
+  "exec -i hermes python3 -") [[ -f "$STT_CFG" ]] && echo OK || { echo CHANGED; touch "$STT_CFG"; } ;;
+  "restart hermes") echo restarted ;;
   *) echo "stub: $*" ;;
 esac
 DOCKER
@@ -49,7 +62,8 @@ CURL
 }
 
 teardown() {
-  rm -rf "$STUB" "$STATE" "$STATUS" /tmp/.gw-image /tmp/.gw-status-checks /tmp/.gw-token-link
+  rm -rf "$STUB" "$STATE" "$STATUS" /tmp/.gw-image /tmp/.gw-status-checks /tmp/.gw-token-link \
+         /tmp/.gw-stt-sha /tmp/.gw-whisper-link /tmp/.gw-stt-config
   rm -f "$REPO_ROOT/config/gateways.toml"
 }
 
@@ -88,6 +102,38 @@ enable_telegram() {
 @test "setup-gateway.sh is idempotent when telegram stays enabled" {
   enable_telegram
   assert_idempotent su hermes -c "PATH=$STUB:\$PATH HERMES_NONINTERACTIVE=1 bash '$SCRIPTS/setup-gateway.sh'"
+}
+
+@test "setup-gateway.sh deploys and configures the voice STT path" {
+  enable_telegram
+  run su hermes -c "PATH=$STUB:\$PATH HERMES_NONINTERACTIVE=1 bash '$SCRIPTS/setup-gateway.sh'"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"voice STT shim deployed"* ]]
+  [[ "$output" == *"whisper shim linked"* ]]
+  [[ "$output" == *"stt config updated"* ]]
+}
+
+@test "setup-gateway.sh re-heals the whisper link when it is missing (container recreate)" {
+  enable_telegram
+  echo "gateway run" > "$STATE"
+  # Simulate state after a container recreate: shim + config survive in the
+  # volume, but the /usr/local/bin/whisper link was wiped.
+  sha256sum "$REPO_ROOT/scripts/vps/openrouter-stt.py" | awk '{print $1}' > /tmp/.gw-stt-sha
+  touch /tmp/.gw-stt-config
+  rm -f /tmp/.gw-whisper-link
+  run su hermes -c "PATH=$STUB:\$PATH HERMES_NONINTERACTIVE=1 bash '$SCRIPTS/setup-gateway.sh'"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"whisper shim linked"* ]]
+  [[ "$output" == *"voice STT shim already current"* ]]
+  [[ "$output" == *"stt config already enabled"* ]]
+}
+
+@test "setup-gateway.sh warns and skips voice STT when OPENROUTER_API_KEY is absent" {
+  enable_telegram
+  run su hermes -c "PATH=$STUB:\$PATH HERMES_NONINTERACTIVE=1 OPENROUTER_KEY_MISSING=1 bash '$SCRIPTS/setup-gateway.sh'"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"OPENROUTER_API_KEY not set"* ]]
+  [[ "$output" != *"voice STT shim deployed"* ]]
 }
 
 @test "setup-gateway.sh does not call Telegram when gateway is already active" {
