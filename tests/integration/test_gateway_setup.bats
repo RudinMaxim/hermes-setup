@@ -32,11 +32,13 @@ case "$*" in
   "exec hermes sh -lc test -f /opt/data/google_token.json"*) [[ "${GOOGLE_TOKEN_PRESENT:-0}" = "1" ]] && exit 0 || exit 1 ;;
   "exec -u root hermes sh -lc mkdir -p /home/hermes/.hermes && ln -sf /opt/data/google_token.json /home/hermes/.hermes/google_token.json && chown -h hermes:hermes /home/hermes/.hermes/google_token.json"*) echo "$*" > /tmp/.gw-token-link; exit 0 ;;
   # --- voice STT path (lib/voice.sh) -----------------------------------------
-  *OPENROUTER_API_KEY*) [[ "${OPENROUTER_KEY_MISSING:-0}" = "1" ]] && exit 1 || exit 0 ;;
+  *YANDEX_API_KEY*) [[ "${YANDEX_KEY_MISSING:-0}" = "1" ]] && exit 1 || exit 0 ;;
+  *YANDEX_FOLDER_ID*) [[ "${YANDEX_FOLDER_MISSING:-0}" = "1" ]] && exit 1 || exit 0 ;;
+  *OPENROUTER_API_KEY*) touch /tmp/.gw-openrouter-key-checked; exit 0 ;;
   *"command -v ffmpeg"*) exit 0 ;;
-  "cp "*"openrouter-stt.py"*) sha256sum "$2" | awk '{print $1}' > "$STT_SHA"; exit 0 ;;
-  *sha256sum*openrouter-stt.py*) [[ -f "$STT_SHA" ]] && cat "$STT_SHA"; exit 0 ;;
-  *"grep -q "*"openrouter-stt.py"*) [[ -f "$WHISPER_LINK" ]] && exit 0 || exit 1 ;;
+  "cp "*"yandex-speechkit-stt.py"*) sha256sum "$2" | awk '{print $1}' > "$STT_SHA"; exit 0 ;;
+  *sha256sum*yandex-speechkit-stt.py*) [[ -f "$STT_SHA" ]] && cat "$STT_SHA"; exit 0 ;;
+  *"grep -q "*"yandex-speechkit-stt.py"*) [[ -f "$WHISPER_LINK" ]] && exit 0 || exit 1 ;;
   *printf*whisper*) touch "$WHISPER_LINK"; exit 0 ;;
   "exec -i hermes python3 -") [[ -f "$STT_CFG" ]] && echo OK || { echo CHANGED; touch "$STT_CFG"; } ;;
   "restart hermes") echo restarted ;;
@@ -58,12 +60,15 @@ CURL
   # Fresh gateways.toml + .env owned by hermes.
   cp "$REPO_ROOT/config/gateways.toml.example" "$REPO_ROOT/config/gateways.toml"
   cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
+  sed -i 's|^YANDEX_API_KEY=|YANDEX_API_KEY=test-yandex-key|' "$REPO_ROOT/config/.env"
+  sed -i 's|^YANDEX_FOLDER_ID=|YANDEX_FOLDER_ID=b1gtestfolder|' "$REPO_ROOT/config/.env"
+  sed -i 's|^HERMES_STT_PROVIDER=.*|HERMES_STT_PROVIDER=yandex|' "$REPO_ROOT/config/.env"
   chown hermes "$REPO_ROOT/config/gateways.toml" "$REPO_ROOT/config/.env"
 }
 
 teardown() {
   rm -rf "$STUB" "$STATE" "$STATUS" /tmp/.gw-image /tmp/.gw-status-checks /tmp/.gw-token-link \
-         /tmp/.gw-stt-sha /tmp/.gw-whisper-link /tmp/.gw-stt-config
+         /tmp/.gw-stt-sha /tmp/.gw-whisper-link /tmp/.gw-stt-config /tmp/.gw-openrouter-key-checked
   rm -f "$REPO_ROOT/config/gateways.toml"
 }
 
@@ -111,6 +116,7 @@ enable_telegram() {
   [[ "$output" == *"voice STT shim deployed"* ]]
   [[ "$output" == *"whisper shim linked"* ]]
   [[ "$output" == *"stt config updated"* ]]
+  [ ! -f /tmp/.gw-openrouter-key-checked ]
 }
 
 @test "setup-gateway.sh re-heals the whisper link when it is missing (container recreate)" {
@@ -118,7 +124,7 @@ enable_telegram() {
   echo "gateway run" > "$STATE"
   # Simulate state after a container recreate: shim + config survive in the
   # volume, but the /usr/local/bin/whisper link was wiped.
-  sha256sum "$REPO_ROOT/scripts/vps/openrouter-stt.py" | awk '{print $1}' > /tmp/.gw-stt-sha
+  sha256sum "$REPO_ROOT/scripts/vps/yandex-speechkit-stt.py" | awk '{print $1}' > /tmp/.gw-stt-sha
   touch /tmp/.gw-stt-config
   rm -f /tmp/.gw-whisper-link
   run su hermes -c "PATH=$STUB:\$PATH HERMES_NONINTERACTIVE=1 bash '$SCRIPTS/setup-gateway.sh'"
@@ -128,12 +134,25 @@ enable_telegram() {
   [[ "$output" == *"stt config already enabled"* ]]
 }
 
-@test "setup-gateway.sh warns and skips voice STT when OPENROUTER_API_KEY is absent" {
+@test "setup-gateway.sh warns and skips Yandex voice STT when YANDEX_API_KEY is absent" {
   enable_telegram
-  run su hermes -c "PATH=$STUB:\$PATH HERMES_NONINTERACTIVE=1 OPENROUTER_KEY_MISSING=1 bash '$SCRIPTS/setup-gateway.sh'"
+  run su hermes -c "PATH=$STUB:\$PATH HERMES_NONINTERACTIVE=1 YANDEX_KEY_MISSING=1 bash '$SCRIPTS/setup-gateway.sh'"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"OPENROUTER_API_KEY not set"* ]]
+  [[ "$output" == *"YANDEX_API_KEY not set"* ]]
   [[ "$output" != *"voice STT shim deployed"* ]]
+}
+
+@test "check-voice.sh reports Yandex backend without OpenRouter ping" {
+  touch /tmp/.gw-whisper-link /tmp/.gw-stt-config
+
+  run env PATH="$STUB:$PATH" bash "$SCRIPTS/vps/check-voice.sh"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"backend: yandex"* ]]
+  [[ "$output" == *"YANDEX_API_KEY is set"* ]]
+  [[ "$output" == *"YANDEX_FOLDER_ID is set"* ]]
+  [[ "$output" != *"OpenRouter ping"* ]]
+  [ ! -f /tmp/.gw-openrouter-key-checked ]
 }
 
 @test "setup-gateway.sh does not call Telegram when gateway is already active" {

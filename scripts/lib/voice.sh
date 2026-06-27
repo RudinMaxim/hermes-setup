@@ -1,63 +1,88 @@
 # shellcheck shell=bash
 # Telegram voice (speech-to-text) self-healing for the Hermes container.
 #
-# Hermes' `stt.provider = local_command` backend invokes the `whisper` binary by
-# name. On this 3 GB VPS a local whisper model large enough for accurate Russian
-# does not fit, so STT is routed through OpenRouter via a drop-in whisper-CLI
-# shim (scripts/vps/openrouter-stt.py). These helpers make every gateway
-# setup/restart verify and, if needed, repair that path:
-#
-#   1. the shim is present and current in the volume (/opt/data/bin);
-#   2. `whisper` on PATH points at the shim (re-healed after container recreate);
-#   3. the Hermes `stt` config is enabled with provider=local_command;
-#   4. OPENROUTER_API_KEY and ffmpeg are available in the container.
-#
-# Idempotent: a run with nothing to change emits only [SKIP] lines, preserving
-# the project's "second run is all [SKIP]" invariant (see tests/README.md).
+# Hermes invokes a bare `whisper` command for stt.provider=local_command. This
+# module deploys a whisper-compatible hosted-STT adapter into the persistent
+# volume and restores /usr/local/bin/whisper after every container recreate.
 
 CONTAINER_STT_DIR=/opt/data/bin
-CONTAINER_STT_SCRIPT=/opt/data/bin/openrouter-stt.py
 CONTAINER_WHISPER_LINK=/usr/local/bin/whisper
 
+voice_provider() {
+  local configured
+  configured=$(read_env_value "$ENVFILE" HERMES_STT_PROVIDER 2>/dev/null || true)
+  if [[ -n "$configured" ]]; then
+    printf '%s' "$configured"
+  elif env_var_set_in_file "$ENVFILE" YANDEX_API_KEY \
+       && env_var_set_in_file "$ENVFILE" YANDEX_FOLDER_ID; then
+    printf '%s' yandex
+  else
+    printf '%s' openrouter
+  fi
+}
+
+voice_script_name() {
+  case "$1" in
+    yandex)     printf '%s' yandex-speechkit-stt.py ;;
+    openrouter) printf '%s' openrouter-stt.py ;;
+    *) return 1 ;;
+  esac
+}
+
 voice_repo_script() {
-  printf '%s' "$REPO_ROOT/scripts/vps/openrouter-stt.py"
+  local name
+  name=$(voice_script_name "$1") || return 1
+  printf '%s' "$REPO_ROOT/scripts/vps/$name"
+}
+
+voice_container_script() {
+  local name
+  name=$(voice_script_name "$1") || return 1
+  printf '%s' "$CONTAINER_STT_DIR/$name"
 }
 
 voice_local_sha() {
-  sha256sum "$(voice_repo_script)" 2>/dev/null | awk '{print $1}'
+  sha256sum "$(voice_repo_script "$1")" 2>/dev/null | awk '{print $1}'
 }
 
 voice_container_sha() {
-  docker exec hermes sh -lc "sha256sum '$CONTAINER_STT_SCRIPT' 2>/dev/null | awk '{print \$1}'" 2>/dev/null || true
+  local target
+  target=$(voice_container_script "$1") || return 1
+  docker exec hermes sh -lc "sha256sum '$target' 2>/dev/null | awk '{print \$1}'" 2>/dev/null || true
 }
 
 ensure_voice_stt_script() {
-  [[ -f "$(voice_repo_script)" ]] \
-    || { log_warn "missing $(voice_repo_script) — cannot deploy voice STT shim"; return 1; }
-  local local_sha cont_sha
-  local_sha="$(voice_local_sha)"
-  cont_sha="$(voice_container_sha)"
+  local provider="$1" source target local_sha cont_sha
+  source=$(voice_repo_script "$provider") \
+    || { log_warn "unsupported HERMES_STT_PROVIDER=$provider"; return 1; }
+  target=$(voice_container_script "$provider") || return 1
+  [[ -f "$source" ]] \
+    || { log_warn "missing $source — cannot deploy voice STT shim"; return 1; }
+
+  local_sha=$(voice_local_sha "$provider")
+  cont_sha=$(voice_container_sha "$provider")
   if [[ -n "$local_sha" && "$local_sha" == "$cont_sha" ]]; then
-    log_skip "voice STT shim already current ($CONTAINER_STT_SCRIPT)"
+    log_skip "voice STT shim already current ($target)"
     return 0
   fi
-  log_act "deploying voice STT shim to $CONTAINER_STT_SCRIPT"
+  log_act "deploying $provider voice STT shim to $target"
   docker exec -u root hermes sh -lc "mkdir -p '$CONTAINER_STT_DIR'"
-  docker cp "$(voice_repo_script)" "hermes:$CONTAINER_STT_SCRIPT" >/dev/null
-  docker exec -u root hermes sh -lc "chmod +x '$CONTAINER_STT_SCRIPT'"
+  docker cp "$source" "hermes:$target" >/dev/null
+  docker exec -u root hermes sh -lc "chmod +x '$target'"
   log_ok "voice STT shim deployed"
 }
 
 ensure_voice_whisper_link() {
-  # Hermes calls bare `whisper`; container recreation wipes /usr/local/bin, so
-  # re-heal the wrapper on every run when it is missing or points elsewhere.
-  if docker exec hermes sh -lc "grep -q 'openrouter-stt.py' '$CONTAINER_WHISPER_LINK' 2>/dev/null"; then
-    log_skip "whisper -> OpenRouter STT shim already linked"
+  local provider="$1" target name
+  target=$(voice_container_script "$provider") || return 1
+  name=$(voice_script_name "$provider") || return 1
+  if docker exec hermes sh -lc "grep -q '$name' '$CONTAINER_WHISPER_LINK' 2>/dev/null"; then
+    log_skip "whisper -> $provider STT shim already linked"
     return 0
   fi
-  log_act "pointing $CONTAINER_WHISPER_LINK at the OpenRouter STT shim"
+  log_act "pointing $CONTAINER_WHISPER_LINK at the $provider STT shim"
   docker exec -u root hermes sh -lc \
-    "printf '#!/bin/sh\nexec python3 %s \"\$@\"\n' '$CONTAINER_STT_SCRIPT' > '$CONTAINER_WHISPER_LINK' && chmod +x '$CONTAINER_WHISPER_LINK'"
+    "printf '#!/bin/sh\nexec python3 %s \"\$@\"\n' '$target' > '$CONTAINER_WHISPER_LINK' && chmod +x '$CONTAINER_WHISPER_LINK'"
   log_ok "whisper shim linked"
 }
 
@@ -95,25 +120,49 @@ PY
   esac
 }
 
-# Verify and, when needed, repair the Telegram voice (STT) path. Safe to call on
-# every gateway setup/restart. Never fails the gateway: missing prerequisites
-# downgrade to a [WARN] so text messaging still comes up.
+ensure_voice_credentials() {
+  local provider="$1"
+  case "$provider" in
+    yandex)
+      if ! docker exec hermes sh -lc 'test -n "$YANDEX_API_KEY"'; then
+        log_warn "YANDEX_API_KEY not set in container — Telegram voice STT disabled until it is configured"
+        return 1
+      fi
+      if ! docker exec hermes sh -lc 'test -n "$YANDEX_FOLDER_ID"'; then
+        log_warn "YANDEX_FOLDER_ID not set in container — Telegram voice STT disabled until it is configured"
+        return 1
+      fi
+      ;;
+    openrouter)
+      if ! docker exec hermes sh -lc 'test -n "$OPENROUTER_API_KEY"'; then
+        log_warn "OPENROUTER_API_KEY not set in container — Telegram voice STT disabled until it is configured"
+        return 1
+      fi
+      if ! docker exec hermes sh -lc 'command -v ffmpeg >/dev/null 2>&1'; then
+        log_warn "ffmpeg missing in container — OpenRouter voice STT needs audio conversion"
+      fi
+      ;;
+    *)
+      log_warn "unsupported HERMES_STT_PROVIDER=$provider (expected yandex or openrouter)"
+      return 1
+      ;;
+  esac
+}
+
+# Safe to call on every gateway setup/restart. Missing voice prerequisites are
+# warnings: they must never take down text messaging.
 ensure_voice_stt() {
+  local provider
   if ! docker_container_running hermes; then
     log_warn "hermes not running; skipping voice STT check"
     return 0
   fi
-  if ! docker exec hermes sh -lc 'test -n "$OPENROUTER_API_KEY"'; then
-    log_warn "OPENROUTER_API_KEY not set in container — Telegram voice STT disabled until it is configured"
-    return 0
-  fi
-  if ! docker exec hermes sh -lc 'command -v ffmpeg >/dev/null 2>&1'; then
-    log_warn "ffmpeg missing in container — voice STT needs it to convert Telegram audio"
-  fi
+  provider=$(voice_provider)
+  ensure_voice_credentials "$provider" || return 0
 
   VOICE_CONFIG_CHANGED=0
-  ensure_voice_stt_script || return 0
-  ensure_voice_whisper_link
+  ensure_voice_stt_script "$provider" || return 0
+  ensure_voice_whisper_link "$provider"
   ensure_voice_stt_config
 
   if [[ "${VOICE_CONFIG_CHANGED:-0}" == "1" ]]; then

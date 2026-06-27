@@ -1,42 +1,63 @@
 #!/usr/bin/env bash
-# Report the actual Telegram voice (speech-to-text) readiness of the Hermes
-# container on the VPS. Structural checks plus a live OpenRouter reachability
-# ping. Run on demand — it is intentionally NOT part of every gateway setup, so
-# setup runs stay idempotent and free of per-run API calls.
-#
-# Usage: ./scripts/vps/check-voice.sh
+# Report Telegram voice (speech-to-text) readiness for the selected backend.
 
 set -uo pipefail
 
-CONTAINER_STT_SCRIPT=/opt/data/bin/openrouter-stt.py
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+ENVFILE="$REPO_ROOT/config/.env"
 CONTAINER_WHISPER_LINK=/usr/local/bin/whisper
 failures=0
+
+# shellcheck source=../lib/checks.sh
+source "$REPO_ROOT/scripts/lib/checks.sh"
 
 ok()   { printf '[OK] %s\n' "$*"; }
 warn() { printf '[WARN] %s\n' "$*"; }
 fail() { printf '[FAIL] %s\n' "$*"; failures=$((failures + 1)); }
+
+provider=$(read_env_value "$ENVFILE" HERMES_STT_PROVIDER 2>/dev/null || true)
+if [[ -z "$provider" ]]; then
+  if env_var_set_in_file "$ENVFILE" YANDEX_API_KEY; then
+    provider=yandex
+  else
+    provider=openrouter
+  fi
+fi
+
+case "$provider" in
+  yandex)
+    script_name=yandex-speechkit-stt.py
+    required_vars=(YANDEX_API_KEY YANDEX_FOLDER_ID)
+    ;;
+  openrouter)
+    script_name=openrouter-stt.py
+    required_vars=(OPENROUTER_API_KEY)
+    ;;
+  *)
+    fail "unsupported voice STT backend: $provider"
+    exit "$failures"
+    ;;
+esac
+
+container_script="/opt/data/bin/$script_name"
+ok "backend: $provider"
 
 if [[ "$(docker inspect -f '{{.State.Status}}' hermes 2>/dev/null)" != "running" ]]; then
   fail "hermes container is not running"
   exit "$failures"
 fi
 
-if docker exec hermes sh -lc 'command -v ffmpeg >/dev/null 2>&1'; then
-  ok "ffmpeg present (Telegram OGG/Opus -> mp3 conversion)"
+if docker exec hermes sh -lc "test -x '$container_script'"; then
+  ok "$provider STT shim present: $container_script"
 else
-  fail "ffmpeg missing in container"
+  fail "$provider STT shim missing — run ./scripts/setup-gateway.sh --restart"
 fi
 
-if docker exec hermes sh -lc "test -x '$CONTAINER_STT_SCRIPT'"; then
-  ok "OpenRouter STT shim present: $CONTAINER_STT_SCRIPT"
+if docker exec hermes sh -lc "grep -q '$script_name' '$CONTAINER_WHISPER_LINK' 2>/dev/null"; then
+  ok "whisper -> $provider STT shim is linked"
 else
-  fail "OpenRouter STT shim missing — run ./scripts/setup-gateway.sh --restart"
-fi
-
-if docker exec hermes sh -lc "grep -q 'openrouter-stt.py' '$CONTAINER_WHISPER_LINK' 2>/dev/null"; then
-  ok "whisper -> OpenRouter STT shim is linked"
-else
-  fail "$CONTAINER_WHISPER_LINK does not point at the shim — run ./scripts/setup-gateway.sh --restart"
+  fail "$CONTAINER_WHISPER_LINK does not point at $script_name"
 fi
 
 if docker exec -i hermes python3 - <<'PY'
@@ -52,46 +73,27 @@ else
   fail "stt config not enabled — run ./scripts/setup-gateway.sh --restart"
 fi
 
-if ! docker exec hermes sh -lc 'test -n "$OPENROUTER_API_KEY"'; then
-  fail "OPENROUTER_API_KEY not set in container"
-  exit "$failures"
-fi
-ok "OPENROUTER_API_KEY is set"
+for var in "${required_vars[@]}"; do
+  if docker exec hermes sh -lc "test -n \"\$$var\""; then
+    ok "$var is set"
+  else
+    fail "$var is not set in the container"
+  fi
+done
 
-# Live reachability ping: confirms the key authenticates and the configured
-# audio model id is valid, without needing a speech sample.
-if docker exec -i hermes python3 - <<'PY'
-import json, os, sys, urllib.request, urllib.error
-
-key = os.environ["OPENROUTER_API_KEY"].strip()
-model = os.environ.get("HERMES_OPENROUTER_STT_MODEL", "google/gemini-2.5-flash").strip() or "google/gemini-2.5-flash"
-payload = {"model": model, "max_tokens": 1, "messages": [{"role": "user", "content": "ping"}]}
-req = urllib.request.Request(
-    "https://openrouter.ai/api/v1/chat/completions",
-    data=json.dumps(payload).encode(), method="POST",
-    headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-)
-try:
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        body = json.loads(resp.read().decode())
-    sys.stderr.write(f"model={model}\n")
-    sys.exit(0 if body.get("choices") else 1)
-except urllib.error.HTTPError as exc:
-    sys.stderr.write(f"HTTP {exc.code}: {exc.read().decode('utf-8','replace')[:200]}\n")
-    sys.exit(1)
-except Exception as exc:
-    sys.stderr.write(f"{exc}\n")
-    sys.exit(1)
-PY
-then
-  ok "OpenRouter audio model reachable and authenticated"
-else
-  fail "OpenRouter ping failed — check OPENROUTER_API_KEY and HERMES_OPENROUTER_STT_MODEL"
+if [[ "$provider" == "openrouter" ]]; then
+  if docker exec hermes sh -lc 'command -v ffmpeg >/dev/null 2>&1'; then
+    ok "ffmpeg present for OpenRouter audio conversion"
+  else
+    fail "ffmpeg missing in container"
+  fi
 fi
 
 if [[ "$failures" -eq 0 ]]; then
-  printf '\nTelegram voice STT is ready. For a full end-to-end test, send a voice\n'
-  printf 'message to the bot in DM and check: docker logs --since 3m hermes\n'
+  printf '\nTelegram voice STT is structurally ready. Send a voice message longer\n'
+  printf 'than 30 seconds, then inspect: docker logs --since 3m hermes\n'
+else
+  warn "voice STT has $failures failed readiness check(s)"
 fi
 
 exit "$failures"
