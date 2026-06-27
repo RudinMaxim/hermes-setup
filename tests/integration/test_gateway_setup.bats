@@ -39,6 +39,9 @@ case "$*" in
   "cp "*"yandex-speechkit-stt.py"*) sha256sum "$2" | awk '{print $1}' > "$STT_SHA"; exit 0 ;;
   *sha256sum*yandex-speechkit-stt.py*) [[ -f "$STT_SHA" ]] && cat "$STT_SHA"; exit 0 ;;
   *"grep -q "*"yandex-speechkit-stt.py"*) [[ -f "$WHISPER_LINK" ]] && exit 0 || exit 1 ;;
+  "cp "*"openrouter-stt.py"*) sha256sum "$2" | awk '{print $1}' > "$STT_SHA"; exit 0 ;;
+  *sha256sum*openrouter-stt.py*) [[ -f "$STT_SHA" ]] && cat "$STT_SHA"; exit 0 ;;
+  *"grep -q "*"openrouter-stt.py"*) [[ -f "$WHISPER_LINK" ]] && exit 0 || exit 1 ;;
   *printf*whisper*) touch "$WHISPER_LINK"; exit 0 ;;
   "exec -i hermes python3 -") [[ -f "$STT_CFG" ]] && echo OK || { echo CHANGED; touch "$STT_CFG"; } ;;
   "restart hermes") echo restarted ;;
@@ -153,6 +156,20 @@ enable_telegram() {
   [[ "$output" == *"YANDEX_FOLDER_ID is set"* ]]
   [[ "$output" != *"OpenRouter ping"* ]]
   [ ! -f /tmp/.gw-openrouter-key-checked ]
+}
+
+@test "setup-gateway.sh preserves automatic OpenRouter voice fallback" {
+  enable_telegram
+  sed -i 's|^YANDEX_API_KEY=.*|YANDEX_API_KEY=|' "$REPO_ROOT/config/.env"
+  sed -i 's|^YANDEX_FOLDER_ID=.*|YANDEX_FOLDER_ID=|' "$REPO_ROOT/config/.env"
+  sed -i 's|^HERMES_STT_PROVIDER=.*|HERMES_STT_PROVIDER=|' "$REPO_ROOT/config/.env"
+  sed -i 's|^OPENROUTER_API_KEY=.*|OPENROUTER_API_KEY=legacy-test-key|' "$REPO_ROOT/config/.env"
+
+  run su hermes -c "PATH=$STUB:\$PATH HERMES_NONINTERACTIVE=1 bash '$SCRIPTS/setup-gateway.sh'"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"deploying openrouter voice STT shim"* ]]
+  [ -f /tmp/.gw-openrouter-key-checked ]
 }
 
 @test "setup-gateway.sh does not call Telegram when gateway is already active" {

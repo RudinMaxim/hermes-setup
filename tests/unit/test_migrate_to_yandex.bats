@@ -43,7 +43,11 @@ while [[ $# -gt 0 ]]; do
     shift
   fi
 done
-printf '{"choices":[{"message":{"content":"ok"}}]}' > "$output"
+if [[ "${CURL_NO_TOOLS:-0}" == "1" ]]; then
+  printf '{"choices":[{"message":{"content":"ok"}}]}' > "$output"
+else
+  printf '{"choices":[{"message":{"tool_calls":[{"function":{"name":"migration_probe","arguments":"{}"}}]}}]}' > "$output"
+fi
 STUB
   chmod +x "$TEST_BIN/docker" "$TEST_BIN/curl"
 
@@ -98,6 +102,17 @@ teardown() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"YandexGPT API validation failed"* ]]
   [[ "$output" != *"test-secret-key"* ]]
+  [ "$(cat "$TEST_ROOT/config/.env")" = "$before" ]
+  [ ! -e "$TEST_ROOT/setup-hermes.called" ]
+}
+
+@test "model without function calling is rejected before configuration changes" {
+  before="$(cat "$TEST_ROOT/config/.env")"
+
+  run env CURL_NO_TOOLS=1 YANDEX_API_KEY=test-secret-key YANDEX_FOLDER_ID=b1gtestfolder bash "$SCRIPT"
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"does not support function calling"* ]]
   [ "$(cat "$TEST_ROOT/config/.env")" = "$before" ]
   [ ! -e "$TEST_ROOT/setup-hermes.called" ]
 }

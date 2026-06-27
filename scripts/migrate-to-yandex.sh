@@ -84,7 +84,7 @@ validate_inputs() {
 validate_yandex_api() {
   local api_key="$1" folder_id="$2" model="$3" response payload
   response=$(mktemp)
-  payload=$(printf '{"model":"%s","messages":[{"role":"user","content":"Reply with OK"}],"max_tokens":8}' "$model")
+  payload=$(printf '%s' '{"model":"'"$model"'","messages":[{"role":"user","content":"Call migration_probe now"}],"tools":[{"type":"function","function":{"name":"migration_probe","description":"Verify agent tool calling","parameters":{"type":"object","properties":{},"additionalProperties":false}}}],"tool_choice":{"type":"function","function":{"name":"migration_probe"}},"max_tokens":32}')
   if ! curl --fail-with-body --silent --show-error --max-time 60 \
       --request POST https://ai.api.cloud.yandex.net/v1/chat/completions \
       --header "Authorization: Api-Key $api_key" \
@@ -98,6 +98,10 @@ validate_yandex_api() {
   if ! grep -q '"choices"' "$response"; then
     rm -f "$response"
     die "YandexGPT API validation returned an unexpected response"
+  fi
+  if ! grep -q '"tool_calls"' "$response"; then
+    rm -f "$response"
+    die "selected Yandex model does not support function calling required by Hermes"
   fi
   rm -f "$response"
   log_ok "Yandex AI Studio credentials and model validated"
