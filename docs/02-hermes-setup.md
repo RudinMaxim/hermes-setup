@@ -6,9 +6,49 @@ su - hermes
 cd ~/hermes-setup
 ```
 
+## Recommended: migrate chat and Telegram voice to Yandex
+
+Run one command as the `hermes` user:
+
+```bash
+bash scripts/migrate-to-yandex.sh
+```
+
+The script asks for:
+
+1. `YANDEX_API_KEY` — hidden input;
+2. `YANDEX_FOLDER_ID` — visible input;
+3. model URI — press Enter to use
+   `gpt://<folder-id>/aliceai-llm`.
+
+Before changing the installation, the script sends a real function-call probe
+to Yandex AI Studio. A plain text response is not enough: Hermes requires
+tool calling. It then creates timestamped backups under
+`~/.hermes-yandex-migration-backups/`, updates `config/.env`, configures the
+named `custom:yandex` provider, switches voice to SpeechKit v3, recreates the
+container and restarts the Telegram gateway.
+
+The default is Alice AI LLM because Hermes requires at least 64k context for
+agent tools. Current YandexGPT Pro 5.x models have 32k context; Alice AI LLM is
+the Yandex-native chat model with sufficient context. The script rejects any
+selected model that does not return a real `tool_calls` response.
+
+After migration, send the bot a voice message longer than 30 seconds and run:
+
+```bash
+bash scripts/vps/check-voice.sh
+docker logs --since 3m hermes
+```
+
+If migration stops after backups are created, it prints exact restore commands.
+It never removes the old OpenRouter key automatically, so rollback remains
+possible until the Yandex path is verified.
+
 ## Required: at least one LLM key in config/.env
 
-The script aborts unless one of `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY` is set and non-empty in `config/.env`.
+The script aborts unless Yandex credentials (`YANDEX_API_KEY` plus
+`YANDEX_FOLDER_ID`) or one of `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or
+`ANTHROPIC_API_KEY` is set and non-empty in `config/.env`.
 
 ### OpenRouter
 1. https://openrouter.ai/keys → create an API key.

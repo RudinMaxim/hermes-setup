@@ -1,4 +1,4 @@
-# YandexGPT и SpeechKit для Hermes — технический дизайн
+# Yandex AI Studio и SpeechKit для Hermes — технический дизайн
 
 **Статус:** approved (brainstorming complete)
 
@@ -9,7 +9,7 @@
 ## Цель
 
 Убрать обязательную зависимость текстового чата и распознавания Telegram voice
-от OpenRouter. Основной LLM должен работать через YandexGPT, а голосовые
+от OpenRouter. Основной LLM должен работать через Yandex AI Studio, а голосовые
 сообщения любой обычной для Telegram длительности, включая сообщения длиннее
 30 секунд, — через асинхронный Yandex SpeechKit API v3.
 
@@ -32,18 +32,24 @@ allowlist, SOUL, sessions, state database или MCP-конфигурацию.
 Hermes использует штатный custom provider:
 
 ```text
-Hermes -> https://ai.api.cloud.yandex.net/v1 -> YandexGPT
+Hermes -> https://ai.api.cloud.yandex.net/v1 -> Alice AI LLM
 ```
 
 Endpoint совместим с OpenAI Chat Completions и поддерживает function calling.
 В конфигурации используется именованный provider `custom:yandex`, ключ берётся
 из `YANDEX_API_KEY`, а модель задаётся полным URI
-`gpt://<folder-id>/yandexgpt`. Полный URI позволяет однозначно указать каталог,
+`gpt://<folder-id>/aliceai-llm`. Полный URI позволяет однозначно указать каталог,
 в котором оплачивается inference.
 
 Имя модели остаётся конфигурируемым через `HERMES_MODEL`. Во время настройки
 оно проверяется запросом к `/v1/models`; установщик не должен молча заменять
 его на OpenRouter default.
+
+YandexGPT Pro 5.x имеет контекст 32k, а Hermes требует минимум 64k для
+агентного режима с tools. Поэтому default — Yandex-native `aliceai-llm` с
+контекстом 128k. Перед применением migration script принудительно запрашивает
+function call и проверяет наличие `tool_calls`; несовместимая модель не
+записывается в конфигурацию.
 
 ### Голос
 
@@ -57,7 +63,7 @@ Telegram OggOpus
   -> polling operation
   -> getRecognition
   -> transcript.txt + stdout
-  -> Hermes передаёт текст в YandexGPT
+  -> Hermes передаёт текст в Alice AI LLM
 ```
 
 Новый адаптер заменяет только реализацию CLI. Он принимает те же аргументы,
@@ -102,7 +108,7 @@ API-ключ ограничивается областью `yc.ai.foundationMode
 YANDEX_API_KEY=
 YANDEX_FOLDER_ID=
 HERMES_MODEL_PROVIDER=custom:yandex
-HERMES_MODEL=gpt://<folder-id>/yandexgpt
+HERMES_MODEL=gpt://<folder-id>/aliceai-llm
 HERMES_STT_PROVIDER=yandex
 HERMES_YANDEX_STT_MODEL=general
 HERMES_YANDEX_STT_TIMEOUT=600
@@ -191,7 +197,7 @@ rollback backend, но он не должен требоваться для Yand
 
 ### Живые smoke-тесты с VPS
 
-1. Обычный текстовый ответ YandexGPT.
+1. Обычный текстовый ответ Yandex AI Studio.
 2. Function call через Hermes tool.
 3. Короткий Telegram voice.
 4. Telegram voice длительностью не менее 90 секунд.
@@ -219,8 +225,8 @@ Rollback выполняется восстановлением backup `config.ya
 ## Критерии готовности
 
 - Hermes запускается без `OPENROUTER_API_KEY`.
-- Текстовый Telegram chat отвечает через YandexGPT.
-- Hermes успешно выполняет минимум один tool call через YandexGPT.
+- Текстовый Telegram chat отвечает через Yandex AI Studio.
+- Hermes успешно выполняет минимум один tool call через выбранную Yandex model.
 - Voice OggOpus длительностью более 30 секунд распознаётся SpeechKit и
   передаётся в тот же диалог.
 - После пересоздания контейнера chat и voice остаются настроенными.
@@ -233,6 +239,7 @@ Rollback выполняется восстановлением backup `config.ya
 - [Hermes: custom OpenAI-compatible providers](https://hermes-agent.nousresearch.com/docs/integrations/providers)
 - [Yandex AI Studio: быстрый старт OpenAI-compatible API](https://aistudio.yandex.ru/docs/ru/ai-studio/quickstart/)
 - [YandexGPT: function calling](https://aistudio.yandex.ru/docs/ru/ai-studio/operations/generation/completions-function.html)
+- [Yandex AI Studio: модели и размеры контекста](https://aistudio.yandex.ru/docs/ru/ai-studio/concepts/generation/models.html)
 - [SpeechKit v3: AsyncRecognizer.RecognizeFile](https://aistudio.yandex.ru/docs/ru/speechkit/stt-v3/api-ref/AsyncRecognizer/recognizeFile)
 - [SpeechKit v3: AsyncRecognizer.GetRecognition](https://aistudio.yandex.ru/docs/ru/speechkit/stt-v3/api-ref/AsyncRecognizer/getRecognition)
 - [Yandex Cloud: API-ключи и scopes](https://yandex.cloud/ru/docs/iam/concepts/authorization/api-key)

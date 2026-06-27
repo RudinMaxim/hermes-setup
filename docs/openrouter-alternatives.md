@@ -6,7 +6,8 @@
 
 Для текущей задачи выбран Yandex Cloud:
 
-- основной чат: YandexGPT через OpenAI-совместимый API Yandex AI Studio;
+- основной чат: Yandex-native Alice AI LLM через OpenAI-совместимый API
+  Yandex AI Studio;
 - распознавание Telegram voice: Yandex SpeechKit API v3;
 - изображения, видео, TTS и остальные мультимедийные функции не входят в эту
   миграцию;
@@ -37,7 +38,7 @@
 YANDEX_API_KEY=<секретный API-ключ сервисного аккаунта>
 YANDEX_FOLDER_ID=<идентификатор каталога>
 HERMES_MODEL_PROVIDER=custom:yandex
-HERMES_MODEL=gpt://<идентификатор каталога>/yandexgpt
+HERMES_MODEL=gpt://<идентификатор каталога>/aliceai-llm
 HERMES_STT_PROVIDER=yandex
 ```
 
@@ -52,7 +53,8 @@ custom_providers:
 
 model:
   provider: custom:yandex
-  default: gpt://<идентификатор каталога>/yandexgpt
+  default: gpt://<идентификатор каталога>/aliceai-llm
+  context_length: 131072
 
 stt:
   enabled: true
@@ -62,7 +64,7 @@ stt:
 ```
 
 Полный URI модели содержит folder ID, поэтому Hermes может обращаться к
-YandexGPT через обычный OpenAI-compatible custom endpoint. Точное имя
+Yandex AI Studio через обычный OpenAI-compatible custom endpoint. Точное имя
 доступной модели проверяется через `/v1/models` во время настройки и может быть
 переопределено переменной `HERMES_MODEL`.
 
@@ -71,7 +73,12 @@ YandexGPT через обычный OpenAI-compatible custom endpoint. Точн�
 > OpenRouter, OpenAI и Anthropic и при повторном запуске перезаписывает секцию
 > `model`. Сначала необходимо реализовать изменения из технического дизайна.
 
-### Пример проверки YandexGPT
+YandexGPT Pro 5.x не используется как default: его контекст 32k меньше
+минимума 64k, требуемого Hermes для агентных tools. `aliceai-llm` —
+Yandex-native модель с достаточным контекстом. Migration script дополнительно
+проверяет реальный function call до изменения конфигурации.
+
+### Пример проверки Yandex AI Studio
 
 На VPS после заполнения переменных можно проверить API независимо от Hermes:
 
@@ -82,7 +89,7 @@ curl --fail-with-body \
   --header "OpenAI-Project: ${YANDEX_FOLDER_ID}" \
   --header "Content-Type: application/json" \
   --data '{
-    "model": "gpt://'"${YANDEX_FOLDER_ID}"'/yandexgpt",
+    "model": "gpt://'"${YANDEX_FOLDER_ID}"'/aliceai-llm",
     "messages": [{"role": "user", "content": "Ответь одним словом: работает?"}],
     "max_tokens": 20
   }'
@@ -133,7 +140,7 @@ curl --fail-with-body \
 
 1. Сделать резервные копии `config/.env` и `/opt/data/config.yaml`.
 2. Добавить Yandex credentials, не удаляя OpenRouter credentials.
-3. Выполнить независимые smoke-тесты YandexGPT и SpeechKit.
+3. Выполнить независимые smoke-тесты Yandex AI Studio и SpeechKit.
 4. Переключить чат на `custom:yandex` и проверить обычный ответ и tool call.
 5. Переключить `whisper` shim на SpeechKit и проверить voice длительностью не
    менее 90 секунд.
