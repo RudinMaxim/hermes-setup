@@ -43,6 +43,71 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
+@test "setup-hermes.sh accepts Yandex credentials without OpenRouter" {
+  cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
+  printf 'YANDEX_API_KEY=test-yandex-key\nYANDEX_FOLDER_ID=b1gtestfolder\n' >> "$REPO_ROOT/config/.env"
+  sed -i 's|^HERMES_MODEL_PROVIDER=.*|HERMES_MODEL_PROVIDER=custom:yandex|' "$REPO_ROOT/config/.env"
+  sed -i 's|^HERMES_MODEL=.*|HERMES_MODEL=gpt://b1gtestfolder/aliceai-llm|' "$REPO_ROOT/config/.env"
+
+  run su hermes -c "bash '$SCRIPTS/setup-hermes.sh' --configs-only"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"LLM API key present in .env"* ]]
+}
+
+@test "setup-hermes.sh rejects Yandex provider without folder ID" {
+  cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
+  printf 'YANDEX_API_KEY=test-yandex-key\n' >> "$REPO_ROOT/config/.env"
+  sed -i 's|^HERMES_MODEL_PROVIDER=.*|HERMES_MODEL_PROVIDER=custom:yandex|' "$REPO_ROOT/config/.env"
+  sed -i 's|^HERMES_MODEL=.*|HERMES_MODEL=gpt://missing/aliceai-llm|' "$REPO_ROOT/config/.env"
+
+  run su hermes -c "bash '$SCRIPTS/setup-hermes.sh' --configs-only"
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"YANDEX_FOLDER_ID"* ]]
+}
+
+@test "setup-hermes.sh writes the named Yandex custom provider" {
+  cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
+  printf 'YANDEX_API_KEY=test-yandex-key\nYANDEX_FOLDER_ID=b1gtestfolder\n' >> "$REPO_ROOT/config/.env"
+  sed -i 's|^HERMES_MODEL_PROVIDER=.*|HERMES_MODEL_PROVIDER=custom:yandex|' "$REPO_ROOT/config/.env"
+  sed -i 's|^HERMES_MODEL=.*|HERMES_MODEL=gpt://b1gtestfolder/aliceai-llm|' "$REPO_ROOT/config/.env"
+
+  mkdir -p /tmp/bin-stub
+  cat >/tmp/bin-stub/docker <<'STUB'
+#!/usr/bin/env bash
+case "$*" in
+  "info") exit 0 ;;
+  "image inspect nousresearch/hermes-agent:latest") exit 0 ;;
+  "volume inspect hermes_data") exit 0 ;;
+  "run --rm --user root -v hermes_data:/opt/data --entrypoint sh "*) exit 2 ;;
+  "network inspect hermes_net") exit 0 ;;
+  "inspect -f {{.State.Status}} hermes") echo running ;;
+  "inspect -f "*"Mounts"*" hermes") echo "/home/hermes/projects" ;;
+  "exec hermes hermes --version") echo "hermes 0.1.0" ;;
+  "exec hermes sh -c test -f "*"config.yaml") exit 0 ;;
+  "exec hermes hermes config show") echo "redact_secrets: true" ;;
+  "exec -i hermes python3 - custom:yandex gpt://b1gtestfolder/aliceai-llm")
+    cat >/tmp/.hermes-yandex-config-snippet
+    exit 0
+    ;;
+  *) echo "stub: $*" ;;
+esac
+STUB
+  chmod +x /tmp/bin-stub/docker
+  rm -f /tmp/.hermes-yandex-config-snippet
+
+  run su hermes -c "PATH=/tmp/bin-stub:\$PATH bash '$SCRIPTS/setup-hermes.sh'"
+
+  [ "$status" -eq 0 ]
+  grep -q 'custom_providers' /tmp/.hermes-yandex-config-snippet
+  grep -q 'https://ai.api.cloud.yandex.net/v1' /tmp/.hermes-yandex-config-snippet
+  grep -q 'YANDEX_API_KEY' /tmp/.hermes-yandex-config-snippet
+  grep -q 'chat_completions' /tmp/.hermes-yandex-config-snippet
+
+  rm -rf /tmp/bin-stub /tmp/.hermes-yandex-config-snippet
+}
+
 @test "setup-hermes.sh migrates old Ubuntu 26.04 fallback base image" {
   cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
   sed -i 's|^OPENAI_API_KEY=|OPENAI_API_KEY=sk-test|' "$REPO_ROOT/config/.env"

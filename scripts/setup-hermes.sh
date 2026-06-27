@@ -92,16 +92,29 @@ migrate_fallback_base_image() {
 }
 
 ensure_llm_key() {
+  local configured_provider
+  configured_provider=$(read_env_value "$ENVFILE" HERMES_MODEL_PROVIDER 2>/dev/null || true)
+  if [[ "$configured_provider" == "custom:yandex" ]]; then
+    env_var_set_in_file "$ENVFILE" YANDEX_API_KEY \
+      || die "YANDEX_API_KEY is required for HERMES_MODEL_PROVIDER=custom:yandex"
+    env_var_set_in_file "$ENVFILE" YANDEX_FOLDER_ID \
+      || die "YANDEX_FOLDER_ID is required for HERMES_MODEL_PROVIDER=custom:yandex"
+    log_ok "LLM API key present in .env"
+    return 0
+  fi
   if env_var_set_in_file "$ENVFILE" OPENROUTER_API_KEY \
      || env_var_set_in_file "$ENVFILE" OPENAI_API_KEY \
-     || env_var_set_in_file "$ENVFILE" ANTHROPIC_API_KEY; then
+     || env_var_set_in_file "$ENVFILE" ANTHROPIC_API_KEY \
+     || { env_var_set_in_file "$ENVFILE" YANDEX_API_KEY \
+          && env_var_set_in_file "$ENVFILE" YANDEX_FOLDER_ID; }; then
     log_ok "LLM API key present in .env"
     return 0
   fi
   if is_interactive; then
     local provider var key
-    provider=$(prompt_value "LLM provider (openrouter/openai/anthropic)")
+    provider=$(prompt_value "LLM provider (yandex/openrouter/openai/anthropic)")
     case "$provider" in
+      yandex|Yandex|YANDEX)          var=YANDEX_API_KEY ;;
       openrouter|OpenRouter|OPENROUTER) var=OPENROUTER_API_KEY ;;
       anthropic|Anthropic|ANTHROPIC) var=ANTHROPIC_API_KEY ;;
       *)                             var=OPENAI_API_KEY ;;
@@ -111,9 +124,18 @@ ensure_llm_key() {
     log_act "saving $var to .env"
     set_env_value "$ENVFILE" "$var" "$key" >/dev/null
     log_ok "$var saved to .env (${#key} chars)"
+    if [[ "$var" == "YANDEX_API_KEY" ]]; then
+      local folder_id
+      folder_id=$(prompt_value "YANDEX_FOLDER_ID")
+      [[ -n "$folder_id" ]] || die "empty YANDEX_FOLDER_ID entered — aborting"
+      set_env_value "$ENVFILE" YANDEX_FOLDER_ID "$folder_id" >/dev/null
+      set_env_value "$ENVFILE" HERMES_MODEL_PROVIDER "custom:yandex" >/dev/null
+      set_env_value "$ENVFILE" HERMES_MODEL "gpt://$folder_id/aliceai-llm" >/dev/null
+      log_ok "YANDEX_FOLDER_ID and Yandex model saved to .env"
+    fi
     return 0
   fi
-  die "no LLM API key configured — set OPENROUTER_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY in $ENVFILE (see docs/02-hermes-setup.md)"
+  die "no LLM API key configured — set YANDEX_API_KEY + YANDEX_FOLDER_ID, OPENROUTER_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY in $ENVFILE (see docs/02-hermes-setup.md)"
 }
 
 run_fallback_build() {
@@ -378,11 +400,40 @@ if not isinstance(config, dict):
 
 current = config.get("model")
 desired = {"provider": provider, "default": model}
+if provider == "custom:yandex" and model.rstrip("/").endswith("/aliceai-llm"):
+    desired["context_length"] = 131072
 telegram = config.get("telegram")
 if not isinstance(telegram, dict):
     telegram = {}
 
 changed = False
+if provider == "custom:yandex":
+    custom_providers = config.get("custom_providers")
+    if not isinstance(custom_providers, list):
+        custom_providers = []
+    yandex_provider = {
+        "name": "yandex",
+        "base_url": "https://ai.api.cloud.yandex.net/v1",
+        "key_env": "YANDEX_API_KEY",
+        "api_mode": "chat_completions",
+    }
+    yandex_index = next(
+        (
+            index
+            for index, item in enumerate(custom_providers)
+            if isinstance(item, dict) and item.get("name") == "yandex"
+        ),
+        None,
+    )
+    if yandex_index is None:
+        custom_providers.append(yandex_provider)
+        changed = True
+    elif custom_providers[yandex_index] != yandex_provider:
+        custom_providers[yandex_index] = yandex_provider
+        changed = True
+    if config.get("custom_providers") != custom_providers:
+        config["custom_providers"] = custom_providers
+        changed = True
 if current != desired:
     config["model"] = desired
     changed = True
