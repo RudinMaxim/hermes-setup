@@ -158,6 +158,19 @@ enable_telegram() {
   [ ! -f /tmp/.gw-openrouter-key-checked ]
 }
 
+@test "check-voice.sh requires complete Yandex credentials for automatic selection" {
+  sed -i 's|^YANDEX_FOLDER_ID=.*|YANDEX_FOLDER_ID=|' "$REPO_ROOT/config/.env"
+  sed -i 's|^HERMES_STT_PROVIDER=.*|HERMES_STT_PROVIDER=|' "$REPO_ROOT/config/.env"
+  sed -i 's|^OPENROUTER_API_KEY=.*|OPENROUTER_API_KEY=legacy-test-key|' "$REPO_ROOT/config/.env"
+  touch /tmp/.gw-whisper-link /tmp/.gw-stt-config
+
+  run env PATH="$STUB:$PATH" bash "$SCRIPTS/vps/check-voice.sh"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"backend: openrouter"* ]]
+  [ -f /tmp/.gw-openrouter-key-checked ]
+}
+
 @test "setup-gateway.sh preserves automatic OpenRouter voice fallback" {
   enable_telegram
   sed -i 's|^YANDEX_API_KEY=.*|YANDEX_API_KEY=|' "$REPO_ROOT/config/.env"

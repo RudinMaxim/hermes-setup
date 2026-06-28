@@ -18,7 +18,8 @@ fail() { printf '[FAIL] %s\n' "$*"; failures=$((failures + 1)); }
 
 provider=$(read_env_value "$ENVFILE" HERMES_STT_PROVIDER 2>/dev/null || true)
 if [[ -z "$provider" ]]; then
-  if env_var_set_in_file "$ENVFILE" YANDEX_API_KEY; then
+  if env_var_set_in_file "$ENVFILE" YANDEX_API_KEY \
+     && env_var_set_in_file "$ENVFILE" YANDEX_FOLDER_ID; then
     provider=yandex
   else
     provider=openrouter
