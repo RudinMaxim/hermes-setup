@@ -67,6 +67,16 @@ setup() {
   [[ "$output" == *"YANDEX_FOLDER_ID"* ]]
 }
 
+@test "setup-hermes.sh does not use Yandex credentials for an OpenRouter provider" {
+  cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
+  printf 'YANDEX_API_KEY=test-yandex-key\nYANDEX_FOLDER_ID=b1gtestfolder\n' >> "$REPO_ROOT/config/.env"
+
+  run su hermes -c "bash '$SCRIPTS/setup-hermes.sh' --configs-only"
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"no LLM API key configured"* ]]
+}
+
 @test "setup-hermes.sh writes the named Yandex custom provider" {
   cp "$REPO_ROOT/config/.env.example" "$REPO_ROOT/config/.env"
   printf 'YANDEX_API_KEY=test-yandex-key\nYANDEX_FOLDER_ID=b1gtestfolder\n' >> "$REPO_ROOT/config/.env"

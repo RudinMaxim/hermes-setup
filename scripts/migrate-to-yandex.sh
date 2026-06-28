@@ -82,28 +82,31 @@ validate_inputs() {
 }
 
 validate_yandex_api() {
-  local api_key="$1" folder_id="$2" model="$3" response payload
+  local api_key="$1" folder_id="$2" model="$3" response auth_header payload
   response=$(mktemp)
+  auth_header=$(mktemp)
+  printf 'Authorization: Api-Key %s\n' "$api_key" > "$auth_header"
+  chmod 0600 "$auth_header"
   payload=$(printf '%s' '{"model":"'"$model"'","messages":[{"role":"user","content":"Call migration_probe now"}],"tools":[{"type":"function","function":{"name":"migration_probe","description":"Verify agent tool calling","parameters":{"type":"object","properties":{},"additionalProperties":false}}}],"tool_choice":{"type":"function","function":{"name":"migration_probe"}},"max_tokens":32}')
   if ! curl --fail-with-body --silent --show-error --max-time 60 \
       --request POST https://ai.api.cloud.yandex.net/v1/chat/completions \
-      --header "Authorization: Api-Key $api_key" \
+      --header "@$auth_header" \
       --header "OpenAI-Project: $folder_id" \
       --header "Content-Type: application/json" \
       --data "$payload" \
       --output "$response"; then
-    rm -f "$response"
+    rm -f "$response" "$auth_header"
     die "YandexGPT API validation failed — check API key, folder ID, roles, scope, billing, and VPS network"
   fi
   if ! grep -q '"choices"' "$response"; then
-    rm -f "$response"
+    rm -f "$response" "$auth_header"
     die "YandexGPT API validation returned an unexpected response"
   fi
   if ! grep -q '"tool_calls"' "$response"; then
-    rm -f "$response"
+    rm -f "$response" "$auth_header"
     die "selected Yandex model does not support function calling required by Hermes"
   fi
-  rm -f "$response"
+  rm -f "$response" "$auth_header"
   log_ok "Yandex AI Studio credentials and model validated"
 }
 

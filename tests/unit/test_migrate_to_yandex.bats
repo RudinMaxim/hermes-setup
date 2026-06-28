@@ -34,6 +34,7 @@ STUB
   cat > "$TEST_BIN/curl" <<'STUB'
 #!/usr/bin/env bash
 [[ "${CURL_FAIL:-0}" == "1" ]] && exit 22
+printf '%s\n' "$*" > "$HERMES_MIGRATION_ROOT/curl.args"
 output=""
 while [[ $# -gt 0 ]]; do
   if [[ "$1" == "--output" || "$1" == "-o" ]]; then
@@ -80,6 +81,8 @@ teardown() {
   [ "$(find "$TEST_HOME/.hermes-yandex-migration-backups" -name config.env -type f | wc -l)" -eq 1 ]
   [ "$(find "$TEST_HOME/.hermes-yandex-migration-backups" -name config.yaml -type f | wc -l)" -eq 1 ]
   [[ "$output" != *"test-secret-key"* ]]
+  [ -f "$TEST_ROOT/curl.args" ]
+  ! grep -q 'test-secret-key' "$TEST_ROOT/curl.args"
   [[ "$output" == *"Migration complete"* ]]
 }
 

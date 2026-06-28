@@ -104,9 +104,7 @@ ensure_llm_key() {
   fi
   if env_var_set_in_file "$ENVFILE" OPENROUTER_API_KEY \
      || env_var_set_in_file "$ENVFILE" OPENAI_API_KEY \
-     || env_var_set_in_file "$ENVFILE" ANTHROPIC_API_KEY \
-     || { env_var_set_in_file "$ENVFILE" YANDEX_API_KEY \
-          && env_var_set_in_file "$ENVFILE" YANDEX_FOLDER_ID; }; then
+     || env_var_set_in_file "$ENVFILE" ANTHROPIC_API_KEY; then
     log_ok "LLM API key present in .env"
     return 0
   fi
