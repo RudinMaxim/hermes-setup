@@ -7,7 +7,10 @@ write_file_idempotent() {
   local mode="${3:-0644}"
   local tmp
   tmp=$(mktemp)
-  printf '%s' "$content" >"$tmp"
+  # Always terminate with a newline. Callers build $content via $(cat <<EOF ...),
+  # which strips the trailing newline — without this, files like /etc/sudoers.d/hermes
+  # end mid-line and `visudo -cf` rejects them ("missing line terminator").
+  printf '%s\n' "$content" >"$tmp"
   if [[ -f "$target" ]] && cmp -s "$tmp" "$target"; then
     rm -f "$tmp"
     log_skip "file $target already up-to-date"
