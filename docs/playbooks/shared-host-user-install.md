@@ -609,6 +609,61 @@ ssh hermes-<client> 'hermes gateway install; hermes gateway restart; sleep 10;
 Затем клиент пишет боту в VK. Ответ должен прийти. Проверь, что `hermes gateway install`
 создал сервис для `systemctl --user` (`systemctl --user list-units | grep -i hermes`) и он переживает перезагрузку.
 
+## Шаг 10а. 🟢 Утренняя сводка по расписанию (опционально)
+
+Навык `daily-briefing` (в репозитории: `skills/daily-briefing/`) читает календарь и Todoist
+(только чтение) и присылает короткую сводку дня: встречи, задачи с нагрузкой в часах, фокус
+из трёх пунктов, риски, первое дело завтра. Проверено на эталоне 01.11.2026 с доставкой в VK.
+
+**1. Часовой пояс клиента** — обязательно, иначе расписание и «сегодня» считаются по UTC сервера:
+
+```bash
+hermes config set timezone Asia/Yekaterinburg        # IANA-пояс клиента (Пермь/Екатеринбург = UTC+5)
+```
+
+**2. Уровень рассуждений по умолчанию** (по желанию клиента):
+
+```bash
+hermes config set agent.reasoning_effort medium
+```
+
+CLI предупредит, что ключ не распознан: это ошибка валидатора. Рантайм читает именно
+`agent.reasoning_effort` (проверено по коду 0.22.5).
+
+**3. Навык на сервер:**
+
+```bash
+ssh hermes-<client> 'mkdir -p ~/.hermes/skills/productivity/daily-briefing'
+scp skills/daily-briefing/SKILL.md hermes-<client>:~/.hermes/skills/productivity/daily-briefing/
+ssh hermes-<client> 'hermes skills list | grep daily-briefing'    # ожидаемо: local … enabled
+```
+
+**4. Задача по расписанию.** Расписание задаётся в поясе из п. 1. Пример: 04:30 МСК = 06:30 по +5.
+
+```bash
+hermes cron create "30 6 * * *" "Пришли утреннюю сводку дня строго по навыку daily-briefing. Только чтение, ничего не меняй."   --name "Утренняя сводка" --skill daily-briefing --deliver vk:<VK_ID клиента> </dev/null
+hermes config set cron.wrap_response false     # без служебной шапки «Cronjob Response… job_id» и английской подписи
+hermes cron list                               # Next run — в нужное время с нужным смещением
+```
+
+`--deliver` — канал и ID получателя: `vk:<id>`, позже `max:<id>`. Если клиент в канале отправил
+боту `/sethome`, этот чат становится домашним: туда же приходят уведомления о сбоях cron.
+
+**5. Тестовый запуск**: `hermes cron run <job_id>`, через 2–4 минуты сводка приходит в канал.
+Ход выполнения: `grep -E "Running job|tool |Sending" ~/.hermes/logs/agent.log | tail`.
+
+**Подводные камни (все пойманы на эталоне):**
+
+- **Не перезапускай gateway, пока задача выполняется.** Задача теряет «владельца»
+  (`lost its durable fire claim ownership`) и уходит в паузу. Лечение: `hermes cron resume <id>`.
+  Порядок всегда такой: сначала все правки конфига и один перезапуск, потом `cron run`.
+- **`find-tasks-by-date` в Todoist MCP зависал до таймаута** (300 с), хотя сервер отвечал 200.
+  Навык использует `find-tasks` с фильтрами (`today | overdue` и др.), они отвечают за ~1 с.
+  Плюс короткий таймаут вызова: `hermes config set mcp_servers.todoist.timeout 45`.
+- **Скрипты в cron блокируются** (`python -c` и т.п. помечаются как опасные, подтвердить некому).
+  Навык запрещает их и считает сам. Это нормальная защита, не отключай её.
+- **Время сборки сводки** ~3 мин на `glm-5.3-flash`. Для утренней рассылки это неважно.
+
 ## Шаг 11. Приёмка
 
 - [ ] Health-check прода одинаковый до и после работ.
