@@ -14,3 +14,7 @@ __pycache__/
 # Editors
 .vscode/
 .idea/
+
+# OAuth client secrets (Google и др.) — никогда не коммитить
+client_secret*.json
+*_token.json
