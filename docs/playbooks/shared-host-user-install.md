@@ -238,6 +238,41 @@ hermes -z "Ответь одним словом: работаешь?"
 
 **Ожидаемо:** модель отвечает (эталон: `Работаю.`).
 
+### 7.3. 🟢 Запасной провайдер — обязательно
+
+Агрегатор может лечь целиком. На эталоне 01.11.2026 reg.cloud несколько часов отдавал список моделей,
+но любая генерация висела, а потом падала с `500`, и чат стоял. Поэтому всегда подключай второго
+провайдера. Ключ клади так же, как в 7.1 (переменная `TIMEWEB_API_KEY`).
+
+Эталон: основной Timeweb (`https://api.timeweb.ai/v1`, 120+ моделей, в том числе распознавание речи),
+запасной reg.cloud:
+
+```bash
+hermes config set providers.timeweb.base_url https://api.timeweb.ai/v1
+hermes config set providers.timeweb.key_env TIMEWEB_API_KEY
+hermes config set model.provider timeweb
+hermes config set model.base_url https://api.timeweb.ai/v1
+hermes config set model.default zai/glm-5.3-flash          # id у Timeweb с префиксом вендора
+hermes config set fallback_providers '[{"provider": "regcloud", "model": "glm-5.3-flash"}]'
+hermes fallback list
+systemctl --user restart hermes-dashboard                  # интерфейс подхватывает конфиг при старте
+```
+
+Если чат в интерфейсе молчит, а `hermes -z` тоже висит, проверь провайдера напрямую:
+
+```bash
+set -a; . ~/.hermes/.env; set +a
+curl -sS -m 30 -w "\n%{http_code} %{time_total}s\n" https://api.timeweb.ai/v1/chat/completions \
+  -H "Authorization: Bearer $TIMEWEB_API_KEY" -H "Content-Type: application/json" \
+  -d '{"model":"zai/glm-5.3-flash","max_tokens":20,"messages":[{"role":"user","content":"hi"}]}'
+```
+
+Таймаут или `500` при рабочем `/v1/models` означают, что сбой у провайдера, а не у нас: смотри баланс и ключ
+в его кабинете, пиши в поддержку.
+
+У «думающих» моделей (GLM, DeepSeek) при маленьком `max_tokens` поле `content` может прийти пустым:
+весь лимит ушёл на рассуждение. Это не ошибка.
+
 Если `hermes: command not found` — выполни `source ~/.bashrc` или открой новую SSH-сессию.
 
 ## Шаг 8. 🟢 Веб-интерфейс и автозапуск

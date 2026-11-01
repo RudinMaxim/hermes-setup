@@ -11,7 +11,8 @@
 | Пользователь | `hermes` (uid 1001), без sudo и Docker, linger включён |
 | SSH | алиас `hermes-vps`, ключ `~/.ssh/hermes_vps` у исполнителя (у каждого свой — добавить через root, шаг 3) |
 | Hermes | 0.22.5, `~/.hermes`, установлен 2026-11-01 с обходом `nodejs.org` |
-| Модель | reg.cloud `https://ai.reg.cloud/v1`, `claude-5.5-sonnet`, ключ `REGCLOUD_API_KEY` |
+| Модель | основной: Timeweb `https://api.timeweb.ai/v1`, `zai/glm-5.3-flash`, ключ `TIMEWEB_API_KEY` |
+| Запасной провайдер | reg.cloud `https://ai.reg.cloud/v1`, `glm-5.3-flash`, ключ `REGCLOUD_API_KEY` (`fallback_providers`) |
 | Интерфейс | сервис `hermes-dashboard` (`systemctl --user`), слушает `172.17.0.1:9119` |
 | Домен | https://hermes.turni.ru, логин `maksim` |
 | Прокси | Caddyfile в репо `cmmb-prototyping-lab/healthy-student`, PR #11 (merged 2026-11-01) |
