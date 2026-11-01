@@ -8,6 +8,9 @@ Hermes `launchd`, локальный профиль Ollama и безопасну
 Obsidian vault, официальный Todoist MCP и scoped filesystem MCP; Linux/Docker
 setup при этом не меняется.
 
+Для **общего сервера клиента без root и Docker** (рядом работает прод) — пошаговая
+инструкция [`docs/playbooks/shared-host-user-install.md`](docs/playbooks/shared-host-user-install.md).
+
 ## Что делает репозиторий
 
 - Подготавливает Debian/Ubuntu VPS: отдельный пользователь `hermes`, вход по SSH-ключу, UFW, fail2ban, unattended-upgrades.
