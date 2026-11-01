@@ -22,7 +22,7 @@
 | Подтверждения | `approvals.mode: manual`; Todoist `trust: untrusted` (проверено: запись без подтверждения блокируется); правила в `~/.hermes/SOUL.md` (rules v1) |
 | Todoist | официальный MCP `ai.todoist.net/mcp`, токен `MCP_TODOIST_API_KEY`, 47 инструментов |
 | Google | навык `google-workspace`, Desktop OAuth client (проект `rapid-airship-499220-t2`), токен `~/.hermes/google_token.json`, `LIVE_CHECK_OK`; все scopes Workspace |
-| VK | плагин `vk-platform` @ `2443f32` установлен и включён; токен/ID ещё не заданы, gateway не запущен |
+| VK | сообщество Hermes `242841516`, доступ только `175934368` (`VK_ACCESS_POLICY=user_only`), ключ с правами manage+messages(+photos,docs); канал работает с 2026-11-01, ответ ~5 с. `message_event` пока выключен → кнопки подтверждения не приходят |
 | Telegram | не используется: `api.telegram.org` с сервера недоступен |
 
 ## Ограничения от владельца сервера
