@@ -18,6 +18,10 @@
 | Прокси | Caddyfile в репо `cmmb-prototyping-lab/healthy-student`, PR #11 (merged 2026-11-01) |
 | ufw | `172.17.0.1 9119/tcp ALLOW 172.18.0.0/16` (добавлено 2026-11-01) |
 | Туннель | `ssh -N -L 9119:172.17.0.1:9119 hermes-vps` → http://localhost:9119 |
+| Gateway | сервис `hermes-gateway` (`systemctl --user`), с 2026-11-01 |
+| Подтверждения | `approvals.mode: manual`; Todoist `trust: untrusted` (проверено: запись без подтверждения блокируется); правила в `~/.hermes/SOUL.md` (rules v1) |
+| Todoist | официальный MCP `ai.todoist.net/mcp`, токен `MCP_TODOIST_API_KEY`, 47 инструментов |
+| Google | навык `google-workspace`, Desktop OAuth client (проект `rapid-airship-499220-t2`), токен `~/.hermes/google_token.json`, `LIVE_CHECK_OK`; все scopes Workspace |
 | VK | плагин `vk-platform` @ `2443f32` установлен и включён; токен/ID ещё не заданы, gateway не запущен |
 | Telegram | не используется: `api.telegram.org` с сервера недоступен |
 
