@@ -23,6 +23,8 @@
 | Todoist | официальный MCP `ai.todoist.net/mcp`, токен `MCP_TODOIST_API_KEY`, 47 инструментов, `timeout: 45`, `connect_timeout: 90` |
 | Google | навык `google-workspace`, Desktop OAuth client (проект `rapid-airship-499220-t2`), токен `~/.hermes/google_token.json`, `LIVE_CHECK_OK`; все scopes Workspace |
 | Утренняя сводка | навык `daily-briefing`, cron `29d9febd70de` «30 6 * * *» (`timezone: Asia/Yekaterinburg`) = **04:30 МСК**, доставка `vk:175934368`, `cron.wrap_response: false`; VK — домашний канал (`/sethome`). Тест 01.11.2026 доставлен |
+| Голос (STT) | Timeweb `timeweb/whisper-large-v3`, `stt.language: ru`, ключ через `${TIMEWEB_API_KEY}`; проверено на файле 02.11.2026 |
+| Картинки | Timeweb `openai/gpt-image-2` через `image_gen.openai.provider: timeweb`; папка `cache/generated/images/openai_openai` создана (баг со слешем) |
 | Модель: рассуждения | `agent.reasoning_effort: medium` |
 | VK | сообщество Hermes `242841516`, доступ только `175934368` (`VK_ACCESS_POLICY=user_only`), ключ с правами manage+messages(+photos,docs); канал работает с 2026-11-01, ответ ~5 с. `message_event` включён через API 02.11.2026 (нажатие кнопок ещё не проверено) |
 | Telegram | не используется: `api.telegram.org` с сервера недоступен |

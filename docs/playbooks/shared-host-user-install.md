@@ -646,6 +646,46 @@ ssh hermes-<client> 'hermes gateway install; hermes gateway restart; sleep 10;
 Затем клиент пишет боту в VK. Ответ должен прийти. Проверь, что `hermes gateway install`
 создал сервис для `systemctl --user` (`systemctl --user list-units | grep -i hermes`) и он переживает перезагрузку.
 
+## Шаг 9в. 🟢 Голос и картинки через Timeweb (проверено 02.11.2026)
+
+Тот же аккаунт Timeweb AI, что и для модели: отдельные ключи и провайдеры не нужны.
+
+### Распознавание голосовых — для многих клиентов главное (надиктовать задачи)
+
+```bash
+hermes config set stt.provider openai
+hermes config set stt.openai.base_url https://api.timeweb.ai/v1
+hermes config set stt.openai.api_key '${TIMEWEB_API_KEY}'      # ссылка на .env, не сам ключ
+hermes config set stt.openai.model timeweb/whisper-large-v3
+hermes config set stt.openai.language ru
+hermes config set stt.language ru        # ⚠️ по умолчанию "en" — русская речь распознаётся плохо
+```
+
+Проверка на эталоне (русская фраза из TTS Timeweb): `whisper-large-v3`, `gigaam-v3` и `gpt-4o-mini-transcribe`
+распознали дословно за ~1 с. Выбран `whisper-large-v3`: лучше с русской речью вперемешку с английскими
+словами. `gigaam-v3` (Сбер, только русский) — запасной вариант.
+
+`stt.echo_transcripts: true` (по умолчанию) — бот присылает распознанный текст отдельным сообщением 🎙️,
+клиент видит, что его поняли правильно. Оставляем.
+
+Голосовые из VK плагин скачивает сам. Проверка — отправить боту голосовое.
+
+### Генерация картинок
+
+```bash
+hermes config set image_gen.provider openai
+hermes config set image_gen.openai.provider timeweb            # берёт base_url и ключ из providers.timeweb
+hermes config set image_gen.openai.model openai/gpt-image-2    # ~16 с; альтернатива black_forest_labs/flux-2-max (~20 с)
+mkdir -p ~/.hermes/cache/generated/images/openai_openai        # ⚠️ обязательно, см. ниже
+```
+
+⚠️ **Баг Hermes 0.22.5:** id модели со слешем (`openai/gpt-image-2`) превращается в подпапку
+`openai_openai/`, которой нет, и сохранение падает: `Could not save image to cache: No such file or directory`.
+Лечится созданием папки заранее (команда выше). Если в будущей версии исправят — шаг не мешает.
+
+Higgsfield, fal и подобные зарубежные генераторы с российского сервера **недоступны** (Higgsfield: `000`).
+У Timeweb в том же аккаунте есть и видео (Kling, Seedance, Veo) — не подключали.
+
 ## Шаг 10а. 🟢 Утренняя сводка по расписанию (опционально)
 
 Навык `daily-briefing` (в репозитории: `skills/daily-briefing/`) читает календарь и Todoist
