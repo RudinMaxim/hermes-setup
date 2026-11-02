@@ -468,6 +468,14 @@ ssh hermes-<client> 'hermes gateway status | head -1'     # смотрим PID
 ssh hermes-<client> 'kill -TERM <PID>; sleep 25; systemctl --user is-active hermes-gateway'
 ```
 
+**Перед перезапуском gateway проверь, что он никого не обслуживает**: перезапуск обрывает и cron-задачу,
+и **живой разговор клиента в канале** (клиенту приходит уведомление о перезапуске, ответ теряется):
+
+```bash
+grep -E "inbound message|response ready|Running job" ~/.hermes/logs/agent.log | tail -3   # последний вход без ответа = идёт диалог
+hermes cron list | grep -i running
+```
+
 **После любого изменения конфига** (MCP, провайдер, правила) перезапускай оба сервиса:
 `systemctl --user restart hermes-gateway hermes-dashboard`.
 
@@ -549,6 +557,12 @@ ID, без угаданных аргументов, поведение при ci
 > Проверено на эталоне 01.11.2026: сообщение из VK → ответ агента за ~5 с.
 > Проверка событий: `groups.getLongPollSettings` должен вернуть `message_new`, `message_edit`, `message_event` = 1.
 > Без `message_event` кнопки подтверждения не приходят (плагин пишет об этом в лог при подключении).
+> Галочка в интерфейсе VK у клиента может не сохраниться. Ключ с правом `manage` позволяет включить события самим:
+> ```bash
+> set -a; . ~/.hermes/.env; set +a
+> curl -s "https://api.vk.com/method/groups.setLongPollSettings?v=5.199&group_id=$VK_GROUP_ID&enabled=1&api_version=5.199&message_new=1&message_edit=1&message_event=1&access_token=$VK_GROUP_TOKEN"
+> ```
+> Симптом выключенного `message_event`: кнопки «Allow Once / Allow / Deny» нажимаются, но ничего не происходит, срабатывает только текстовый `/approve`.
 
 **Telegram с серверов в РФ не работает**: `api.telegram.org` заблокирован, проверено.
 Альтернатива — VK. Плагин сам опрашивает VK (Long Poll), входящие порты не нужны.
