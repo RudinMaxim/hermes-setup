@@ -686,6 +686,53 @@ mkdir -p ~/.hermes/cache/generated/images/openai_openai        # ⚠️ обяз
 Higgsfield, fal и подобные зарубежные генераторы с российского сервера **недоступны** (Higgsfield: `000`).
 У Timeweb в том же аккаунте есть и видео (Kling, Seedance, Veo) — не подключали.
 
+## Шаг 9г. 🟢 База знаний Obsidian (проверено 02.11.2026)
+
+Агент читает и правит хранилище Obsidian клиента. Схема: хранилище — git-репозиторий на GitHub →
+клон на сервере → MCP файловой системы, ограниченный папкой хранилища → синхронизация каждые 5 минут.
+
+1. 🟢 **Deploy-ключ только для этого репозитория** (не личный ключ, не токен ко всему GitHub):
+   ```bash
+   ssh-keygen -t ed25519 -N "" -C "hermes <client> obsidian deploy" -f ~/.ssh/obsidian_deploy
+   cat >> ~/.ssh/config <<EOF
+   Host github-obsidian
+       HostName github.com
+       User git
+       IdentityFile ~/.ssh/obsidian_deploy
+       IdentitiesOnly yes
+   EOF
+   ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts
+   ```
+   💻 **Клиент сам** добавляет `obsidian_deploy.pub` в репозиторий: Settings → Deploy keys → ✅ Allow write access.
+   (Агент-исполнитель выдавать доступы к GitHub клиента не должен — и автоматический режим это блокирует.)
+2. 🟢 Клон и git-подпись агента:
+   ```bash
+   git clone git@github-obsidian:<owner>/<vault-repo>.git ~/obsidian_store
+   git config --global user.name "Hermes Agent (<client>)"; git config --global user.email "hermes-agent@turni.local"
+   ```
+3. 🟢 **MCP файловой системы** — локально, с фиксированной версией (без `npx` на каждый запуск):
+   ```bash
+   N=$(ls -d ~/.hermes/tools/node-*/bin | head -1); export PATH=$N:$PATH
+   mkdir -p ~/mcp/filesystem && cd ~/mcp/filesystem && npm init -y && npm install @modelcontextprotocol/server-filesystem
+   S=~/mcp/filesystem/node_modules/@modelcontextprotocol/server-filesystem/dist/index.js
+   hermes config set mcp_servers.obsidian.command "$N/node"
+   hermes config set mcp_servers.obsidian.args "[\"$S\", \"/home/hermes/obsidian_store\"]"
+   hermes config set mcp_servers.obsidian.trust full        # правки без кнопки: откат через git (решение владельца)
+   ```
+   Доступ ограничен папкой хранилища. Чтобы закрыть часть хранилища от модели — вместо корня передать
+   только нужные папки (например `…/1. Projects` и `…/0. Inbox`). **Всё прочитанное уходит провайдеру модели.**
+4. 🟢 **Синхронизация**: `scripts/vps/obsidian-sync.sh` → `~/bin/`, unit и timer из `scripts/vps/systemd/` →
+   `~/.config/systemd/user/`, затем `systemctl --user enable --now obsidian-sync.timer`.
+   Коммит правок агента → `pull --rebase` → `push`; при конфликте — ничего не пушит, `ERROR` в
+   `~/.hermes/logs/obsidian-sync.log`, force-push никогда.
+5. 🟢 Навык `skills/obsidian-para/` → `~/.hermes/skills/note-taking/obsidian-para/`.
+6. Перезапуск gateway (проверив, что агент свободен), `hermes mcp test obsidian` → 14 инструментов.
+7. **Проверка целиком**: агент читает заметку и создаёт `0. Inbox/hermes-test.md` → синхронизация →
+   файл виден на GitHub → удалить → синхронизация.
+
+⚠️ **На устройствах клиента** Obsidian Git должен регулярно подтягивать изменения (Auto pull 5 мин,
+Pull on startup), иначе правки агента и клиента расходятся и при ручном пуше будет конфликт.
+
 ## Шаг 10а. 🟢 Утренняя сводка по расписанию (опционально)
 
 Навык `daily-briefing` (в репозитории: `skills/daily-briefing/`) читает календарь и Todoist

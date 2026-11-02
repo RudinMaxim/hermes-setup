@@ -25,6 +25,7 @@
 | Утренняя сводка | навык `daily-briefing`, cron `29d9febd70de` «30 6 * * *» (`timezone: Asia/Yekaterinburg`) = **04:30 МСК**, доставка `vk:175934368`, `cron.wrap_response: false`; VK — домашний канал (`/sethome`). Тест 01.11.2026 доставлен |
 | Голос (STT) | Timeweb `timeweb/whisper-large-v3`, `stt.language: ru`, ключ через `${TIMEWEB_API_KEY}`; проверено на файле 02.11.2026 |
 | Картинки | Timeweb `openai/gpt-image-2` через `image_gen.openai.provider: timeweb`; папка `cache/generated/images/openai_openai` создана (баг со слешем) |
+| Obsidian | клон `RudinMaxim/obsidian_store` → `~/obsidian_store` (deploy-ключ `~/.ssh/obsidian_deploy`, alias `github-obsidian`); MCP `obsidian` (server-filesystem 2.1.0, только папка хранилища, `trust: full`); `obsidian-sync.timer` каждые 5 мин; навык `obsidian-para`. Проверено чтение/запись/push 02.11.2026 |
 | Модель: рассуждения | `agent.reasoning_effort: medium` |
 | VK | сообщество Hermes `242841516`, доступ только `175934368` (`VK_ACCESS_POLICY=user_only`), ключ с правами manage+messages(+photos,docs); канал работает с 2026-11-01, ответ ~5 с. `message_event` включён через API 02.11.2026 (нажатие кнопок ещё не проверено) |
 | Telegram | не используется: `api.telegram.org` с сервера недоступен |
