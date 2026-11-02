@@ -10,6 +10,7 @@ setup при этом не меняется.
 
 Для **общего сервера клиента без root и Docker** (рядом работает прод) — пошаговая
 инструкция [`docs/playbooks/shared-host-user-install.md`](docs/playbooks/shared-host-user-install.md).
+Спутники: [файлы агента](docs/playbooks/agent-files.md), [реестр каналов](docs/playbooks/channels.md).
 
 ## Что делает репозиторий
 
