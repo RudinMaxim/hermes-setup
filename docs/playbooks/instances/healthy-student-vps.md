@@ -19,7 +19,7 @@
 | ufw | `172.17.0.1 9119/tcp ALLOW 172.18.0.0/16` (добавлено 2026-11-01) |
 | Туннель | `ssh -N -L 9119:172.17.0.1:9119 hermes-vps` → http://localhost:9119 |
 | Gateway | сервис `hermes-gateway` (`systemctl --user`), с 2026-11-01 |
-| Подтверждения | `approvals.mode: manual`; Todoist `trust: untrusted` (проверено: запись без подтверждения блокируется); правила в `~/.hermes/SOUL.md` (rules v1) |
+| Подтверждения | `approvals.mode: manual`; Todoist `trust: untrusted` (проверено: запись без подтверждения блокируется); правила в `~/.hermes/SOUL.md` (rules v2, 02.11.2026); в VK отключён `code_execution`, `approvals.deny` на вставки кода |
 | Todoist | официальный MCP `ai.todoist.net/mcp`, токен `MCP_TODOIST_API_KEY`, 47 инструментов, `timeout: 45`, `connect_timeout: 90` |
 | Google | навык `google-workspace`, Desktop OAuth client (проект `rapid-airship-499220-t2`), токен `~/.hermes/google_token.json`, `LIVE_CHECK_OK`; все scopes Workspace |
 | Утренняя сводка | навык `daily-briefing`, cron `29d9febd70de` «30 6 * * *» (`timezone: Asia/Yekaterinburg`) = **04:30 МСК**, доставка `vk:175934368`, `cron.wrap_response: false`; VK — домашний канал (`/sethome`). Тест 01.11.2026 доставлен |
