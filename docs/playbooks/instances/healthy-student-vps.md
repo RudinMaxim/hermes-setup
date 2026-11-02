@@ -24,7 +24,7 @@
 | Google | навык `google-workspace`, Desktop OAuth client (проект `rapid-airship-499220-t2`), токен `~/.hermes/google_token.json`, `LIVE_CHECK_OK`; все scopes Workspace |
 | Утренняя сводка | навык `daily-briefing`, cron `29d9febd70de` «30 6 * * *» (`timezone: Asia/Yekaterinburg`) = **04:30 МСК**, доставка `vk:175934368`, `cron.wrap_response: false`; VK — домашний канал (`/sethome`). Тест 01.11.2026 доставлен |
 | Модель: рассуждения | `agent.reasoning_effort: medium` |
-| VK | сообщество Hermes `242841516`, доступ только `175934368` (`VK_ACCESS_POLICY=user_only`), ключ с правами manage+messages(+photos,docs); канал работает с 2026-11-01, ответ ~5 с. `message_event` включён через API 02.11.2026 — кнопки подтверждения работают |
+| VK | сообщество Hermes `242841516`, доступ только `175934368` (`VK_ACCESS_POLICY=user_only`), ключ с правами manage+messages(+photos,docs); канал работает с 2026-11-01, ответ ~5 с. `message_event` включён через API 02.11.2026 (нажатие кнопок ещё не проверено) |
 | Telegram | не используется: `api.telegram.org` с сервера недоступен |
 
 ## Ограничения от владельца сервера
