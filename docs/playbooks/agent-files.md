@@ -61,7 +61,9 @@
 hermes config set model.default gemini/gemini-3.5-flash      # через Timeweb; см. сравнение ниже
 hermes config set agent.reasoning_effort low                 # medium — только для сложного планирования
 hermes config set fallback_providers '[{"provider":"timeweb","model":"zai/glm-5.3-flash"},{"provider":"regcloud","model":"glm-5.3-flash"}]'
-hermes config set compression.threshold_tokens 32000         # сжимать историю при 32 тыс., а не при 50% окна
+hermes config set compression.threshold_tokens 48000         # сжимать историю при 48 тыс., а не при 50% окна (32 тыс. — слишком мало, см. ниже)
+hermes config set compression.protect_last_n 8
+hermes config set compression.min_tail_user_messages 2
 hermes config set compression.proactive_prune_tokens 20000   # без вызова модели обрезать старые выводы инструментов
 hermes config set tool_budget.mcp_result_size_chars 15000    # потолок ответа одного MCP-вызова
 ```
