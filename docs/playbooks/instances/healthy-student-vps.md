@@ -11,8 +11,8 @@
 | Пользователь | `hermes` (uid 1001), без sudo и Docker, linger включён |
 | SSH | алиас `hermes-vps`, ключ `~/.ssh/hermes_vps` у исполнителя (у каждого свой — добавить через root, шаг 3) |
 | Hermes | 0.22.5, `~/.hermes`, установлен 2026-11-01 с обходом `nodejs.org` |
-| Модель | основной: Timeweb `https://api.timeweb.ai/v1`, `gemini/gemini-3.5-flash` (с 04.11.2026), ключ `TIMEWEB_API_KEY`. баланс пополнен 08.11.2026 |
-| Запасной провайдер | `fallback_providers`: Timeweb `zai/glm-5.3-flash`, затем reg.cloud `https://ai.reg.cloud/v1` `glm-5.3-flash`, ключ `REGCLOUD_API_KEY` |
+| Модель | основной: Timeweb `https://api.timeweb.ai/v1`, `anthropic/claude-haiku-5-5` (с 08.11.2026; ~2,1 ₽ за сценарий против 21 ₽ на `gemini-3.5-flash`), ключ `TIMEWEB_API_KEY` |
+| Запасной провайдер | `fallback_providers`: Timeweb `gemini/gemini-3.5-flash-lite`, затем reg.cloud `https://ai.reg.cloud/v1` `glm-5.3-flash`, ключ `REGCLOUD_API_KEY`; бэкап до смены `config.yaml.bak-20261108-model` |
 | Сжатие и бюджет | `compression.threshold_tokens 48000`, `protect_last_n 8`, `min_tail_user_messages 2`, `proactive_prune_tokens 20000`; `tool_budget.mcp_result_size_chars 15000` |
 | Чистка (08.11.2026) | `skills.disabled` — 48 навыков (осталось 13); наборы VK/cron/CLI 12/8/14; бэкап `config.yaml.bak-20261108` |
 | Интерфейс | сервис `hermes-dashboard` (`systemctl --user`), слушает `172.17.0.1:9119` |
