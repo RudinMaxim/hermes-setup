@@ -1,0 +1,6 @@
+[Unit]
+Description=Check that Hermes integrations (Google, Todoist, VK, Timeweb, reg.cloud) still authenticate; message the owner in VK on change
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 %h/.local/bin/integrations-check.py
