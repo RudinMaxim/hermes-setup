@@ -1,0 +1,11 @@
+[Unit]
+Description=Forward Docker bridge 172.17.0.1:9120 to the loopback Hermes Webapp (for the site's Caddy)
+After=network-online.target hermes-gateway.service
+
+[Service]
+ExecStart=/usr/bin/python3 %h/.local/bin/tcp-forward.py 172.17.0.1:9120 127.0.0.1:9120
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
