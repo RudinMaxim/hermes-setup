@@ -22,8 +22,13 @@
 
 - Вход: `ssh hermes-vps` под пользователем `hermes`, ключ `~/.ssh/hermes_vps`.
 - SSH иногда рвётся. Помощник с повторами: `scripts/vps/sshr.sh '<команда>'`. Он буферизует вывод.
-- Hermes 0.22.5, установлен нативно в `~/.hermes`. Работает как systemd `--user` сервисы `hermes-gateway` и `hermes-dashboard`.
-- Веб-интерфейс слушает только 127.0.0.1:9119 и открывается через SSH-туннель. Домен — hermes.turni.ru.
+- Hermes 0.23.0 (с 09.11.2026), установлен нативно в `~/.hermes`. Сервисы systemd `--user`:
+  - `hermes-gateway` — заодно отдаёт новый чат-интерфейс (Webapp) на 127.0.0.1:9120;
+  - `hermes-dashboard` — админка;
+  - `hermes-webapp-forward` — проброс 172.17.0.1:9120 для Caddy;
+  - `hermes-integrations-check.timer` — проверка токенов, пишет в VK при поломке.
+- Веб-доступ: домен hermes.turni.ru, оба интерфейса закрыты логином и паролем `maksim`. Сейчас домен ведёт на админку. После PR #12 в репозитории сайта будет так: `/` — чат, `/admin/` — админка. Чат через туннель: `bash scripts/vps/webapp.sh`.
+- Сроки токенов и переподключение: `docs/playbooks/integration-tokens.md`.
 - Логи: `~/.hermes/logs/agent.log`. Расход токенов: `~/.hermes/state.db`, таблица `sessions`:
   - поля `input_tokens`, `cache_read_tokens`, `output_tokens`, `api_call_count`, `tool_call_count`;
   - в `model_config` есть признак `fallback_active`.
@@ -70,12 +75,17 @@
 
 ## Открытые задачи
 
+Полный бэклог репозитория — `docs/tasks/backlog.md` (с 08.11.2026 задачи этого репо живут там, а не в Todoist владельца). Ниже — только горящее.
+
+- **Демо-видео для сайта (блокирует запуск лендинга)** — план и сценарии: `docs/playbooks/demo-videos.md`. Отдельный профиль `demo`, только синтетические данные, канал VK, ускорение с подписью.
+
 - **Todoist `6hwqrJ8cmjwhwG6Q`** (до 09.11):
   - замерить ₽ утренней сводки и сценария «перенеси задачу» на haiku, проверить запрос подтверждения;
   - починить таймаут 45 с у Todoist MCP `find-tasks` на запросе просроченных задач. Это сбой сервиса, а не модели;
   - сделать уведомление о низком балансе Timeweb.
-- Проверить первую утреннюю сводку на haiku (09.11, 04:30).
-- Обновить Hermes 0.22.5 → 0.23.0 (низкий приоритет).
+- **Google-токен умер 09.11 (`invalid_grant`, режим Testing, 7 дней).** 👤 Владелец переводит OAuth-приложение в Production (проект `rapid-airship-499220-t2`), затем авторизация заново и `HC_GOOGLE_MODE=production` в `.env`.
+- **PR #12 в `cmmb-prototyping-lab/healthy-student`** (чат на `/`, админка на `/admin`). 👤 Сначала ufw `allow from 172.18.0.0/16 to 172.17.0.1 port 9120 proto tcp`, потом мерж. После выкатки поставить `HERMES_DASHBOARD_PUBLIC_URL=https://hermes.turni.ru/admin`, перезапустить dashboard, проверить оба адреса.
+- Переподключение Google без нас (ссылка в VK или подключения в Webapp) — не сделано.
 - Протестировать `cdp_url` — подключение к Chrome клиента.
 - Действие владельца: отключить вход по паролю в SSH.
 - Не запушено:
